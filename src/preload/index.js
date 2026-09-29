@@ -21,13 +21,17 @@ const INVOKE = new Set([
   'plugins:install',
   'plugins:uninstall',
   'plugins:entryUrl',
+  'wm:status',
+  'wm:prepare',
+  'wm:detect',
+  'wm:inpaint',
   'update:check',
   'update:download',
   'update:install',
   'update:releasePage',
 ])
 
-const EVENTS = new Set(['media:progress', 'plugins:progress', 'update:status'])
+const EVENTS = new Set(['media:progress', 'plugins:progress', 'update:status', 'wm:progress'])
 
 contextBridge.exposeInMainWorld('toolbox', {
   invoke(channel, payload) {

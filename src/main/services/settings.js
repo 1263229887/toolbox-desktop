@@ -14,7 +14,10 @@ const DEFAULTS = {
   // 注意它会随安装包分发出去，任何拿到安装包的人都能读到，用量失控时在这里换掉。
   nologoToken: 'nologo_37f0a104dcb',
   // 按需下载插件的清单地址，第一阶段指向本仓库 Release 资产
-  pluginRegistryUrl: 'https://github.com/1263229887/toolbox-desktop/releases/latest/download/plugins.json',
+  pluginRegistryUrl: 'https://github.com/1263229887/toolbox-desktop/releases/download/registry/plugins.json',
+  // 留空 = 用 model-registry.js 里登记的地址（GitHub Release）。
+  // 私有仓库的 Release 资产需要鉴权、未登录会 404，所以换境外 OSS/COS 或本地联调都走这里。
+  modelBaseUrl: '',
   autoCheckUpdate: true,
   // 留空 = 用 GitHub provider；填目录 URL 则改走 generic（latest.yml 与产物需同目录）
   updateFeedUrl: '',

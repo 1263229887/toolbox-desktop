@@ -91,7 +91,11 @@ async function resetAll() {
           <span class="label mb-1 block">插件清单地址</span>
           <input class="field w-full" :value="settings.pluginRegistryUrl" data-selectable @change="patch({ pluginRegistryUrl: $event.target.value })" />
         </label>
-        <p class="muted mt-2">清单是发布在 Release 上的 plugins.json，安装时会校验其中声明的 SHA-256。</p>
+        <label class="mt-3 block">
+          <span class="label mb-1 block">模型包源地址（留空用登记的 Release 地址）</span>
+          <input class="field w-full" :value="settings.modelBaseUrl" placeholder="http://127.0.0.1:8000/dist-models" data-selectable @change="patch({ modelBaseUrl: $event.target.value })" />
+        </label>
+        <p class="muted mt-2">清单是发布在 Release 上的 plugins.json，安装时会校验其中声明的 SHA-256。<span class="text-danger">注意：私有仓库的 Release 资产需要登录鉴权，未登录会 404</span>——要对外分发得把仓库转公开，或换境外对象存储并把地址填到这里。</p>
       </section>
 
       <section class="card p-4">

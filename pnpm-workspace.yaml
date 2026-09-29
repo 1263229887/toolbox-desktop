@@ -1,9 +1,11 @@
 # pnpm 11 用 allowBuilds 逐包放行依赖的构建脚本（默认全部拦截）。
-# electron 的 postinstall 负责解压二进制，electron-winstaller 负责拉 NSIS 工具链，esbuild 需要装平台可执行文件。
+# electron 的 postinstall 负责解压二进制，electron-winstaller 负责拉 NSIS 工具链，
+# esbuild 需要平台可执行文件，protobufjs（onnxruntime-web 的依赖）要生成运行时。
 allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  protobufjs: true
 
 # app-builder-lib 26.15/26.17 声明 @electron/get ^3.0.0，但 3.x 的 CJS 入口不导出
 # ElectronDownloadCacheMode（4/5 才有），打 Windows 包时读 undefined.ReadWrite 直接崩。

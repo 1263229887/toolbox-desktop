@@ -28,16 +28,6 @@ export const BUILTIN_TOOLS = [
     capabilities: ['dialog:pickFiles', 'files:read', 'files:save'],
     loader: () => import('@/tools/img-pdf/Index.vue'),
   },
-  {
-    id: 'watermark-remover',
-    name: '图片去水印',
-    summary: '离线模型包按需下载，方案待定',
-    icon: 'i-lucide-eraser',
-    category: '图像',
-    source: 'builtin',
-    status: 'coming',
-    capabilities: [],
-  },
 ]
 
 const plugins = ref([])

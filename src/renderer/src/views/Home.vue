@@ -16,7 +16,12 @@ const grouped = computed(() => {
     list.push(tool)
     byCategory.set(tool.category, list)
   }
-  return [...byCategory.entries()].map(([category, items]) => ({ category, items }))
+  // 交错进场按全局序号算，并封顶在 200ms：分组各自计时的话工具一多就要排近一秒
+  let order = 0
+  return [...byCategory.entries()].map(([category, items]) => ({
+    category,
+    items: items.map((item) => ({ ...item, delay: Math.min(order++ * 40, 200) })),
+  }))
 })
 
 const cardCount = computed(() => grouped.value.reduce((n, g) => n + g.items.length, 0))
@@ -41,10 +46,10 @@ onMounted(() => refresh())
       </button>
     </div>
 
-    <section v-for="(group, gi) in grouped" :key="group.category" class="mb-6">
+    <section v-for="group in grouped" :key="group.category" class="mb-6">
       <h2 class="label mb-2">{{ group.category }}</h2>
       <ul class="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-2.5">
-        <li v-for="(tool, ti) in group.items" :key="tool.id" :style="{ '--d': `${gi * 40 + ti * 30}ms` }" class="tool-enter">
+        <li v-for="tool in group.items" :key="tool.id" :style="{ '--d': `${tool.delay}ms` }" class="tool-enter">
           <button
             class="card group flex h-full w-full items-start gap-3 p-3 text-left transition-[background-color,border-color,transform] duration-150"
             :class="tool.status === 'ready' ? 'hover:border-surface-line-strong hover:bg-#fbfcfd active:translate-y-px' : 'cursor-default opacity-70'"
@@ -76,16 +81,16 @@ onMounted(() => refresh())
 </template>
 
 <style scoped>
-/* 进场只做「存在」的提示，位移 6px、时长 180ms；卡片本身要立刻可读，不做淡入延迟 */
+/* 进场只做「存在」的提示：位移走 --m-shift（减弱动态效果时归零），淡入保留 */
 .tool-enter {
-  animation: tool-in 180ms ease-out backwards;
+  animation: tool-in var(--m-standard) var(--m-enter) backwards;
   animation-delay: var(--d, 0ms);
 }
 
 @keyframes tool-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(var(--m-shift));
   }
 }
 </style>

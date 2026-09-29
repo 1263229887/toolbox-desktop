@@ -11,6 +11,17 @@ const tool = ref(null)
 const view = ref(null)
 const error = ref('')
 const loading = ref(false)
+const styled = new Set()
+
+// 宿主的 UnoCSS 只扫得到自己的源码，插件里的类名不会生成样式，所以插件必须自带 CSS，由这里挂上
+function ensureStyle(found) {
+  if (!found.style || styled.has(found.id)) return
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = `toolbox-plugin://${found.id}/${found.style}`
+  document.head.append(link)
+  styled.add(found.id)
+}
 
 async function resolve(id) {
   loading.value = true
@@ -34,6 +45,7 @@ async function resolve(id) {
       return
     }
     // 插件是独立构建的 ESM 包，从自定义协议里取；@vite-ignore 防止构建期把它当成本地模块解析
+    ensureStyle(found)
     const mod = await import(/* @vite-ignore */ found.entryUrl)
     if (!mod.default) throw new Error('插件入口没有默认导出组件')
     view.value = mod.default

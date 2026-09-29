@@ -1,8 +1,12 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, protocol, shell } from 'electron'
+import { app, BrowserWindow, protocol, session, shell } from 'electron'
 import { registerIpc } from './ipc.js'
 import { PROTOCOL, resolveWithin } from './services/plugins.js'
+
+// 抖音 CDN 认 Referer：渲染进程发媒体请求时会带上自己的来源（dev 是 localhost、打包后是 file://），
+// 这两种都被判 403；实测换成 https://www.douyin.com/ 就 200/206。
+const MEDIA_HOSTS = ['*://*.douyinpic.com/*', '*://*.zjcdn.com/*', '*://*.douyinvod.com/*', '*://*.byteimg.com/*', '*://*.ixigua.com/*']
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !!process.env.ELECTRON_RENDERER_URL
@@ -56,6 +60,10 @@ if (!gotLock) {
 } else {
   app.whenReady().then(() => {
     app.setName('工具箱')
+    session.defaultSession.webRequest.onBeforeSendHeaders({ urls: MEDIA_HOSTS }, (details, callback) => {
+      details.requestHeaders.Referer = 'https://www.douyin.com/'
+      callback({ requestHeaders: details.requestHeaders })
+    })
     // 插件包解压在 userData 下，协议只做该目录的只读映射，越界由 resolveWithin 拦掉
     protocol.handle(PROTOCOL, async (request) => {
       const { host, pathname } = new URL(request.url)
@@ -66,6 +74,15 @@ if (!gotLock) {
     })
 
     registerIpc()
+
+    if (process.env.TOOLBOX_SELFCHECK) {
+      // 无界面自检：验证按需下载链路（清单→下载→校验→安装→协议→卸载）
+      import('./selfcheck.js')
+        .then(({ runSelfcheck }) => runSelfcheck())
+        .then((code) => app.exit(code))
+      return
+    }
+
     createWindow()
 
     app.on('activate', () => {

@@ -10,9 +10,14 @@ const DEFAULTS = {
   parseStrategy: 'auto',
   demoApiHost: DEMO_HOST_DEFAULT,
   nologoEndpoint: 'https://nologo.code24.top/api/open/parse',
-  nologoToken: '',
+  // 兜底接口的 token 直接内置：这是按次计费的自有账号，空着等于第三层链路永远不生效。
+  // 注意它会随安装包分发出去，任何拿到安装包的人都能读到，用量失控时在这里换掉。
+  nologoToken: 'nologo_37f0a104dcb',
   // 按需下载插件的清单地址，第一阶段指向本仓库 Release 资产
   pluginRegistryUrl: 'https://github.com/1263229887/toolbox-desktop/releases/latest/download/plugins.json',
+  autoCheckUpdate: true,
+  // 留空 = 用 GitHub provider；填目录 URL 则改走 generic（latest.yml 与产物需同目录）
+  updateFeedUrl: '',
 }
 
 let cache = null

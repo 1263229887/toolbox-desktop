@@ -93,9 +93,11 @@ async function demoCookie(host) {
   })
   const cookie = login.setCookies.join('; ')
   if (!cookie) throw new Error(`demo 登录失败 HTTP ${login.status}`)
+  const ttl = login.json()?.data?.expires_in || 604800
   demoSession.host = host
   demoSession.cookie = cookie
-  demoSession.expiresAt = Date.now() + ((creds.data?.expires_in || 604800) - 600) * 1000
+  // 提前 10 分钟过期，避免正好卡在边界上失败
+  demoSession.expiresAt = Date.now() + (ttl - 600) * 1000
   return cookie
 }
 
@@ -113,13 +115,21 @@ function pickCleanStream(media) {
   return list.sort((a, b) => (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0))[0]
 }
 
-async function parseViaDemoApi(link, host) {
+/** demo 实例的会话失效（cookie 提前被服务端作废、或实例重启）时用它触发无感重登 */
+class DemoAuthExpired extends Error {}
+
+function authExpired(res) {
+  return res.status === 401 || res.json?.()?.error?.code === 'UNAUTHENTICATED'
+}
+
+async function demoParseOnce(link, host) {
   const cookie = await demoCookie(host)
   const submit = await request(`${host}/api/v1/parse`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: cookie },
     body: { url: link },
   })
+  if (authExpired(submit)) throw new DemoAuthExpired()
   if (!submit.ok) throw new Error(`提交解析失败 HTTP ${submit.status}`)
   const taskId = submit.json()?.data?.task_id
   if (!taskId) throw new Error(`接口没有返回任务号：${submit.text().slice(0, 120)}`)
@@ -128,6 +138,7 @@ async function parseViaDemoApi(link, host) {
   for (let i = 0; i < 20; i++) {
     await sleep(1200)
     const poll = await request(`${host}/api/v1/tasks/${taskId}`, { headers: { Cookie: cookie, Accept: 'application/json' } })
+    if (authExpired(poll)) throw new DemoAuthExpired()
     const data = poll.json()?.data
     if (!data) continue
     if (data.state === 'done') { task = data; break }
@@ -171,6 +182,29 @@ async function parseViaDemoApi(link, host) {
   }
 }
 
+/** 会话过期就清掉缓存重新登录再跑一次，用户不需要知道中间掉过线 */
+async function parseViaDemoApi(link, host) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await demoParseOnce(link, host)
+    } catch (e) {
+      if (!(e instanceof DemoAuthExpired) || attempt === 1) throw e
+      demoSession.cookie = ''
+      demoSession.expiresAt = 0
+    }
+  }
+}
+
+/**
+ * 各家接口给的直链形态不一样：抖音自己的 CDN 路径里没有 .mp4，
+ * 视频靠查询参数（mime_type=video_mp4）或 /video/tos/ 段区分。
+ * 只看后缀会把视频误判成图片，存下来就是个坏文件。
+ */
+export function isVideoUrl(url) {
+  const u = String(url || '')
+  return /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(u) || /mime_type=video|video_mp4|\/video\/tos\//i.test(u)
+}
+
 function collectUrls(node, out) {
   if (typeof node === 'string') {
     if (/^https?:\/\//.test(node) && /\.(jpe?g|png|webp|mp4|mov|m3u8)|douyinpic|byteimg|\/image|\/video/i.test(node) && !out.includes(node)) out.push(node)
@@ -186,8 +220,8 @@ async function parseViaNologo(link, endpoint, token) {
   try { data = JSON.parse(body) } catch { throw new Error('备用接口返回的不是 JSON：' + body.slice(0, 120)) }
   const urls = collectUrls(data, [])
   if (!urls.length) throw new Error('备用接口没有返回媒体地址：' + JSON.stringify(data).slice(0, 150))
-  const items = urls.map((u) => (/\.(mp4|mov|m3u8)(\?|$)/i.test(u) ? { type: 'video', url: u, ext: '.mp4' } : { type: 'image', url: u, ext: pickExt(u) }))
-  return { id: '', kind: items[0].type === 'video' ? 'video' : 'image_album', webUrl: '', title: '', author: null, durationMs: 0, stats: null, cover: '', items }
+  const items = urls.map((u) => (isVideoUrl(u) ? { type: 'video', url: u, ext: '.mp4' } : { type: 'image', url: u, ext: pickExt(u) }))
+  return { id: '', kind: items.some((i) => i.type === 'video') ? 'video' : 'image_album', webUrl: '', title: '', author: null, durationMs: 0, stats: null, cover: '', items }
 }
 
 export const STRATEGIES = ['auto', 'seo', 'demoApi', 'nologo']

@@ -9,18 +9,29 @@ const router = useRouter()
 const { plugins } = useTools()
 
 const appInfo = ref(null)
+const update = ref({ state: 'idle', message: '' })
 const nav = [
   { to: '/', label: '全部工具', icon: 'i-lucide-layout-grid' },
   { to: '/plugins', label: '插件', icon: 'i-lucide-puzzle' },
   { to: '/settings', label: '设置', icon: 'i-lucide-settings' },
 ]
 
+const UPDATE_LABEL = { checking: '检查中', available: '发现新版本', downloading: '下载中', downloaded: '已下载', error: '检查失败' }
+
 const title = computed(() => route.meta?.title || '工具箱')
 const quickTools = computed(() => [...BUILTIN_TOOLS, ...plugins.value])
+
+async function updateAction(action) {
+  await ctx.call(`update:${action}`).catch(() => {})
+}
 
 onMounted(async () => {
   appInfo.value = await ctx.call('app:info').catch(() => null)
   await refresh()
+  ctx.on('update:status', (payload) => (update.value = payload))
+  const settings = await ctx.call('settings:get').catch(() => null)
+  // 只在启动后静默查一次；失败不打扰用户，状态留在提示条里等他自己看
+  if (settings?.autoCheckUpdate) ctx.call('update:check').catch(() => {})
 })
 
 function goTool(tool) {
@@ -68,9 +79,27 @@ function goTool(tool) {
         </button>
       </div>
 
-      <footer class="muted no-drag flex items-center justify-between px-3 py-2">
-        <span>Electron {{ appInfo?.electron }}</span>
-        <span>{{ appInfo?.platform }}</span>
+      <footer class="flex-none border-t border-surface-line px-2 py-2">
+        <Transition name="tip">
+          <div v-if="update.state !== 'idle'" class="mb-2 rounded-md border border-surface-line bg-surface-raised px-2 py-1.5">
+            <div class="flex items-center gap-1.5">
+              <span class="truncate text-12px text-ink-2">{{ UPDATE_LABEL[update.state] || update.state }}{{ update.message ? ' · ' + update.message : '' }}</span>
+              <button v-if="update.state === 'available'" class="btn-primary ml-auto h-6 px-2 text-11px" @click="updateAction('download')">下载</button>
+              <button v-if="update.state === 'downloaded'" class="btn-primary ml-auto h-6 px-2 text-11px" @click="updateAction('install')">重启安装</button>
+              <button v-if="update.state === 'error'" class="btn-ghost ml-auto h-6 px-2 text-11px" @click="updateAction('releasePage')">下载页</button>
+            </div>
+            <div v-if="update.state === 'downloading'" class="mt-1 h-1 overflow-hidden rounded bg-surface-sunken">
+              <span
+                class="block h-full w-full origin-left bg-accent transition-transform duration-150"
+                :style="{ transform: `scaleX(${(update.percent || 0) / 100})` }"
+              />
+            </div>
+          </div>
+        </Transition>
+        <div class="muted no-drag flex items-center justify-between px-1">
+          <span>Electron {{ appInfo?.electron }}</span>
+          <span>{{ appInfo?.platform }}</span>
+        </div>
       </footer>
     </aside>
 
@@ -96,17 +125,35 @@ function goTool(tool) {
 </template>
 
 <style scoped>
-/* 视图切换只动透明度和 4px 位移：范围足够被感知，又不会让密集表格读起来跳 */
-.view-enter-active,
+/* 切工具是高频动作，只做 4px 位移 + 淡入；出场比入场快两成，避免等它 */
+.view-enter-active {
+  transition:
+    opacity var(--m-micro) var(--m-enter),
+    transform var(--m-micro) var(--m-enter);
+}
+
 .view-leave-active {
   transition:
-    opacity 130ms ease-out,
-    transform 130ms ease-out;
+    opacity 90ms var(--m-enter),
+    transform 90ms var(--m-enter);
 }
 
 .view-enter-from,
 .view-leave-to {
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(var(--m-shift));
+}
+
+.tip-enter-active,
+.tip-leave-active {
+  transition:
+    opacity var(--m-micro) var(--m-enter),
+    transform var(--m-micro) var(--m-enter);
+}
+
+.tip-enter-from,
+.tip-leave-to {
+  opacity: 0;
+  transform: translateY(2px);
 }
 </style>

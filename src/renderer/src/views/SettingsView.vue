@@ -95,6 +95,21 @@ async function resetAll() {
       </section>
 
       <section class="card p-4">
+        <div class="label mb-3">更新</div>
+        <label class="mb-3 flex items-center gap-2 text-12px">
+          <input type="checkbox" :checked="settings.autoCheckUpdate" @change="patch({ autoCheckUpdate: $event.target.checked }, '启动时自动检查已更新')" />
+          启动时自动检查更新
+        </label>
+        <label class="block">
+          <span class="label mb-1 block">更新源目录（留空用 GitHub Releases）</span>
+          <input class="field w-full" :value="settings.updateFeedUrl" placeholder="https://&lt;bucket&gt;.cos.ap-seoul.myqcloud.com/upgrade/win/" data-selectable @change="patch({ updateFeedUrl: $event.target.value })" />
+        </label>
+        <p class="muted mt-2">填目录地址即改走 generic provider，要求 <span class="font-mono">latest.yml</span> 与安装包同目录；将来换成境外对象存储只改这一栏。</p>
+        <button class="btn-plain mt-3" @click="api.call('update:check')">立即检查</button>
+        <span class="muted ml-2">结果显示在左下角</span>
+      </section>
+
+      <section class="card p-4">
         <div class="label mb-2">关于</div>
         <ul v-if="appInfo" class="muted tabular space-y-1" data-selectable>
           <li>版本 {{ appInfo.version }} · Electron {{ appInfo.electron }} · Chromium {{ appInfo.chrome }} · Node {{ appInfo.node }}</li>

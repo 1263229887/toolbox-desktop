@@ -3,7 +3,7 @@
  * 解析链路的可执行自检：不开界面、不开浏览器，直接跑主进程用的同一个模块。
  * 用法：pnpm check:parse ["口令或链接"]
  */
-import { extractShareUrl, parse } from '../src/main/services/douyin.js'
+import { extractShareUrl, isVideoUrl, parse } from '../src/main/services/douyin.js'
 
 const DEFAULT_NOTE = 'https://v.douyin.com/RcjSxXKyEr8/'
 const DEFAULT_VIDEO = 'https://v.douyin.com/i2e9yYEe/'
@@ -18,13 +18,21 @@ const check = (label, cond, detail = '') => {
 const messy = '6.94 复制打开抖音，看看【某人的作品】标题 https://v.douyin.com/abc123/ :6pm w@f.BT 11/17 SYm:/'
 check('从整段口令里取链接', extractShareUrl(messy) === 'https://v.douyin.com/abc123', extractShareUrl(messy))
 
-// 2) 图文：必须拿到带 aweme-images 标记的原图直链
+// 2) 视频/图片分类：兜底接口的视频直链没有 .mp4 后缀，只看后缀会把视频存成坏 .jpg
+const VIDEO_URL = 'https://v5-hl-mly-ov.zjcdn.com/d8b059/video/tos/cn/tos-cn-ve-15/oM1514/?a=6383&mime_type=video_mp4&qs=0'
+const IMAGE_URL = 'https://p3-pc-sign.douyinpic.com/tos-cn-i-0813c001/okU6AA5h~tplv-dy-aweme-images:q75.webp?biz_tag=aweme_images'
+check('无后缀的 zjcdn 视频链判为视频', isVideoUrl(VIDEO_URL))
+check('douyinpic 原图判为图片', !isVideoUrl(IMAGE_URL))
+check('.mp4 判为视频', isVideoUrl('https://x.com/a.mp4?t=1'))
+check('.jpg 判为图片', !isVideoUrl('https://x.com/a.jpg'))
+
+// 3) 图文：必须拿到带 aweme-images 标记的原图直链
 const album = await parse(process.argv[2] || DEFAULT_NOTE, { strategy: 'auto' })
 check('图文解析成功', album.items.length > 0, `via=${album.via} 张数=${album.items.length} kind=${album.kind}`)
 check('图文直链全部指向图片 CDN', album.items.every((i) => /douyinpic\.com/.test(i.url)))
 check('去重后无重复 tos id', new Set(album.items.map((i) => i.url.split('?')[0])).size === album.items.length)
 
-// 3) 视频：SEO 直连必然拿不到，必须由解析接口给出不带水印的那一路
+// 4) 视频：SEO 直连必然拿不到，必须由解析接口给出不带水印的那一路
 const video = await parse(process.argv[3] || DEFAULT_VIDEO, { strategy: 'auto' })
 const clip = video.items.find((i) => i.type === 'video')
 check('视频解析成功', !!clip, `via=${video.via} kind=${video.kind}`)

@@ -1,0 +1,12 @@
+{
+  "id": "img-compress",
+  "name": "图片压缩",
+  "summary": "批量转格式与缩放，实时显示每张的压缩后体积",
+  "icon": "i-lucide-minimize-2",
+  "category": "图像",
+  "version": "0.1.0",
+  "entry": "dist/index.js",
+  "style": "dist/index.css",
+  "minHostVersion": "0.1.0",
+  "capabilities": ["dialog:pickFiles", "dialog:pickFolder", "files:read", "files:writeBatch", "shell:openPath"]
+}

@@ -14,7 +14,7 @@ export const BUILTIN_TOOLS = [
     category: '媒体',
     source: 'builtin',
     status: 'ready',
-    capabilities: ['douyin:parse', 'media:save', 'shell:openPath'],
+    capabilities: ['douyin:parse', 'media:save', 'shell:openPath', 'clipboard:readText'],
     loader: () => import('@/tools/douyin/Index.vue'),
   },
   {
@@ -50,6 +50,8 @@ function fromManifest(m) {
     id: m.id,
     name: m.name || m.id,
     summary: m.summary || m.description || '',
+    // 插件自带样式表（宿主构建时扫不到插件里的原子类，所以插件必须自带 CSS）
+    style: m.style || '',
     icon: m.icon || 'i-lucide-puzzle',
     category: m.category || '插件',
     source: 'plugin',

@@ -79,7 +79,8 @@ onMounted(() => {
             <span class="block truncate text-13px font-500">{{ entry.name }} <span class="muted tabular">v{{ entry.version }} · {{ (entry.size / 1048576).toFixed(1) }} MB</span></span>
             <span class="muted block truncate">{{ entry.summary }}</span>
             <span v-if="installing === entry.id && progress.total" class="mt-1 block h-1 overflow-hidden rounded bg-surface-sunken">
-              <span class="block h-full bg-accent transition-[width] duration-200" :style="{ width: pct(progress) + '%' }" />
+              <!-- 进度用 scaleX 而不是 width：改宽度每帧都要重排 -->
+              <span class="block h-full w-full origin-left bg-accent transition-transform duration-150" :style="{ transform: `scaleX(${pct(progress) / 100})` }" />
             </span>
           </span>
           <button class="btn-primary h-7" :disabled="!!installing" @click="install(entry)">

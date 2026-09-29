@@ -11,6 +11,8 @@ export default defineConfig({
     }),
   ],
   transformers: [transformerDirectives(), transformerVariantGroup()],
+  // 插件的图标类名写在 manifest.json 里，宿主构建时扫不到，需要显式保留
+  safelist: ['i-lucide-puzzle', 'i-lucide-minimize-2', 'i-lucide-eraser', 'i-lucide-file-image', 'i-lucide-scissors'],
   theme: {
     colors: {
       surface: {
@@ -39,7 +41,7 @@ export default defineConfig({
   shortcuts: [
     ['card', 'bg-surface-raised border border-surface-line rounded-lg'],
     ['panel', 'bg-surface-raised border border-surface-line rounded-lg shadow-sm'],
-    ['btn-base', 'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md text-13px font-500 select-none transition-colors duration-150 disabled:(opacity-45 cursor-not-allowed)'],
+    ['btn-base', 'inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md text-13px font-500 select-none transition-[background-color,color,border-color,transform] duration-120 ease active:scale-[0.98] disabled:(opacity-45 cursor-not-allowed active:scale-100)'],
     ['btn-primary', 'btn-base bg-accent text-white hover:bg-#255fd0 active:bg-#1f53ba'],
     ['btn-plain', 'btn-base bg-surface-sunken text-ink-1 border border-surface-line hover:bg-#e6e9ee'],
     ['btn-ghost', 'btn-base text-ink-2 hover:bg-surface-sunken hover:text-ink-1'],

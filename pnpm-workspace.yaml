@@ -4,3 +4,9 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+
+# app-builder-lib 26.15/26.17 声明 @electron/get ^3.0.0，但 3.x 的 CJS 入口不导出
+# ElectronDownloadCacheMode（4/5 才有），打 Windows 包时读 undefined.ReadWrite 直接崩。
+# npm 的扁平提升会碰巧让它撞上 electron 44 带来的 5.1.0，pnpm 严格布局不会——所以定向覆盖。
+overrides:
+  app-builder-lib>@electron/get: ^5.1.0

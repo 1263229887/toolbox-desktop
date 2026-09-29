@@ -13,7 +13,9 @@
     "build": "electron-vite build",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win",
+    "plugin:pack": "node tools/pack-plugin.mjs",
     "check:parse": "node tools/check-parse.mjs",
+    "check:plugin": "electron-vite build && TOOLBOX_SELFCHECK=1 electron-vite preview",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -27,6 +29,7 @@
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "fflate": "^0.8.3",
     "unocss": "^66.10.5",
     "vite": "^7.3.6",
     "vue": "^3.5.43",

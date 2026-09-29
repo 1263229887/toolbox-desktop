@@ -1,4 +1,21 @@
-/* 桌面外壳相关的非原子样式：拖拽区、macOS 红绿灯避让、滚动容器。UnoCSS 表达不了这些。 */
+/* 桌面外壳相关的非原子样式：拖拽区、macOS 红绿灯避让、滚动容器、动效令牌。UnoCSS 表达不了这些。 */
+
+/* 动效令牌：入场/出场用 ease-out，屏内位移用 ease-in-out，hover 用 ease。
+   工具箱属于「一天开很多次」的产品型界面，时长一律压到 200ms 以内。 */
+:root {
+  --m-enter: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --m-move: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --m-standard: 180ms;
+  --m-micro: 120ms;
+  --m-shift: 6px;
+}
+
+/* 减弱动态效果不等于取消动效：保留淡入和颜色变化，只去掉位移 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --m-shift: 0px;
+  }
+}
 
 .drag {
   -webkit-app-region: drag;
@@ -27,15 +44,4 @@ html[data-platform='darwin'] .titlebar-reserve {
 /* 数字用等宽，避免解析结果条数、文件大小在跳动时改变布局 */
 .tabular {
   font-variant-numeric: tabular-nums;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
 }

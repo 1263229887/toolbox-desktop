@@ -12,16 +12,22 @@ const INVOKE = new Set([
   'dialog:pickFolder',
   'files:read',
   'files:save',
+  'files:writeBatch',
   'shell:openPath',
   'shell:showItemInFolder',
+  'clipboard:readText',
   'plugins:list',
   'plugins:registry',
   'plugins:install',
   'plugins:uninstall',
   'plugins:entryUrl',
+  'update:check',
+  'update:download',
+  'update:install',
+  'update:releasePage',
 ])
 
-const EVENTS = new Set(['media:progress', 'plugins:progress'])
+const EVENTS = new Set(['media:progress', 'plugins:progress', 'update:status'])
 
 contextBridge.exposeInMainWorld('toolbox', {
   invoke(channel, payload) {

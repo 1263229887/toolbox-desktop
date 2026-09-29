@@ -41,6 +41,18 @@ function createWindow() {
 
   win.once('ready-to-show', () => win.show())
 
+  if (isDev) {
+    // 渲染层的报错在终端里看不见，等于没测；dev 下统一转发到 stdout。
+    // Electron 44：监听器只要声明第二个参数就会走「已废弃的多参数」老路径，
+    // 拿不到字段还会打 deprecation 警告，所以只接 event，字段从 event 上取。
+    win.webContents.on('console-message', (e) => {
+      if (e.level !== 'error' && e.level !== 'warning') return
+      const file = e.frame?.url ? `${e.frame.url.split('/').pop()}:${e.lineNumber}` : ''
+      console.log(`[renderer:${e.level}] ${e.message}${file ? ` (${file})` : ''}`)
+    })
+    win.webContents.on('did-fail-load', (_e, code, desc, url) => console.log(`[renderer] did-fail-load ${code} ${desc} ${url}`))
+  }
+
   // 插件页面/搜索结果里的外链一律交给系统浏览器，应用内不导航
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url)

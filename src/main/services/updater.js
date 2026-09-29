@@ -1,7 +1,10 @@
-import { app } from 'electron'
-import { autoUpdater } from 'electron-updater'
-import { shell } from 'electron'
+import { app, shell } from 'electron'
+import updaterPkg from 'electron-updater'
 import { read as readSettings } from './settings.js'
+
+// electron-updater 是 CJS，主进程跑在 ESM 下：具名 import 会在运行时抛
+// "Named export 'autoUpdater' not found"（构建期发现不了，只有真正加载才炸）
+const { autoUpdater } = updaterPkg
 
 export const RELEASE_PAGE = 'https://github.com/1263229887/toolbox-desktop/releases'
 

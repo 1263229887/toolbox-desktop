@@ -38,8 +38,10 @@ const clip = video.items.find((i) => i.type === 'video')
 check('视频解析成功', !!clip, `via=${video.via} kind=${video.kind}`)
 if (clip) {
   check('视频流不带水印', clip.watermarked !== true, `${clip.width}x${clip.height} ${clip.sizeBytes ? (clip.sizeBytes / 1048576).toFixed(1) + 'MB' : ''}`)
-  const head = await fetch(clip.url, { headers: { Range: 'bytes=0-1' } })
-  check('视频直链可裸 GET（无需 Referer）', head.status === 206 || head.status === 200, `HTTP ${head.status}`)
+  // 断言产品真正走的那条路径：主进程下载用 Googlebot UA + 抖音 Referer。
+  // 裸 GET 能不能通取决于 CDN 当天的 Referer 策略，不是我们要依赖的契约。
+  const head = await fetch(clip.url, { headers: { 'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)', Referer: 'https://www.douyin.com/', Range: 'bytes=0-1' } })
+  check('按生产用的 UA+Referer 可取流', head.status === 206 || head.status === 200, `HTTP ${head.status} ${head.headers.get('content-type')}`)
 }
 
 console.log(`\n链路尝试记录：`)

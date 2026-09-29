@@ -42,36 +42,64 @@ export async function getJson(url, opts = {}) {
 }
 
 /**
- * 流式下载。先写 .part 再改名，中断不会留下半截文件占用目标名。
- * 大文件（模型包）后续可加 Range 续传，这里先保证单文件语义正确。
+ * 流式下载，支持断点续传。先写 .part 再改名，中断不会留下半截文件占用目标名。
+ * GitHub Release 资产在国内实测只有 ~180KB/s 且常在几十 MB 处断掉，
+ * 没有续传的大文件下载基本注定失败，所以这里默认带 Range 续传 + 有限次重试。
  */
-export async function downloadFile(url, dest, { headers = {}, timeout = 300000, onProgress, signal } = {}) {
+export async function downloadFile(url, dest, { headers = {}, timeout = 300000, onProgress, signal, retries = 4, totalHint = 0 } = {}) {
   await fsp.mkdir(path.dirname(dest), { recursive: true })
-  const res = await fetch(url, { headers, signal: signal || AbortSignal.timeout(timeout), redirect: 'follow' })
-  if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}`)
-
-  const total = Number(res.headers.get('content-length')) || 0
   const tmpPath = `${dest}.part`
-  const stream = fs.createWriteStream(tmpPath)
-  let received = 0
-  const reader = res.body.getReader()
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const chunk = Buffer.from(value)
-      received += chunk.length
-      if (!stream.write(chunk)) await new Promise((r) => stream.once('drain', r))
-      onProgress?.({ received, total })
+  const expected = Number(totalHint) || 0
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let have = 0
+    try {
+      have = (await fsp.stat(tmpPath)).size
+    } catch {
+      have = 0
     }
-  } catch (err) {
-    stream.destroy()
-    await fsp.rm(tmpPath, { force: true })
-    throw err
+    if (expected && have >= expected) break
+    const send = { ...headers }
+    if (have) send.Range = `bytes=${have}-`
+    let res
+    try {
+      res = await fetch(url, { headers: send, signal: signal || AbortSignal.timeout(timeout), redirect: 'follow' })
+    } catch (e) {
+      if (attempt < retries) continue
+      throw e
+    }
+    if (have && res.status === 200) have = 0 // 源不支持 Range，只能整份重来
+    if (!res.ok && res.status !== 206) throw new Error(`下载失败 HTTP ${res.status}`)
+    const total = Number(res.headers.get('content-length')) + (res.status === 206 ? have : 0)
+    const stream = fs.createWriteStream(tmpPath, { flags: res.status === 206 ? 'a' : 'w' })
+    let received = res.status === 206 ? have : 0
+    const reader = res.body.getReader()
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = Buffer.from(value)
+        received += chunk.length
+        if (!stream.write(chunk)) await new Promise((r) => stream.once('drain', r))
+        onProgress?.({ received, total })
+      }
+    } catch (e) {
+      stream.destroy()
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        continue
+      }
+      throw e
+    }
+    await new Promise((r, j) => stream.end((e) => (e ? j(e) : r())))
+    if (total && received < total) {
+      if (attempt < retries) continue
+      throw new Error(`下载不完整（${received}/${total} 字节）`)
+    }
+    await fsp.rename(tmpPath, dest)
+    return { size: received, path: dest }
   }
-  await new Promise((r, j) => stream.end((e) => (e ? j(e) : r())))
-  await fsp.rename(tmpPath, dest)
-  return { size: received, path: dest }
+  throw new Error('下载失败：重试次数用尽')
 }
 
 export const stamp = () => Date.now().toString(36)

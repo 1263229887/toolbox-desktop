@@ -65,6 +65,7 @@ export async function ensure(id, onProgress) {
     await downloadFile(url, zipPath, {
       headers: { 'User-Agent': UA.desktop },
       timeout: 3600000,
+      totalHint: pack.size,
       onProgress: (p) => onProgress?.({ id, phase: 'downloading', received: p.received, total: pack.size || p.total }),
     })
     const digest = await sha256Of(zipPath)

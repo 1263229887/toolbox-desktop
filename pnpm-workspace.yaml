@@ -1,0 +1,6 @@
+# pnpm 11 用 allowBuilds 逐包放行依赖的构建脚本（默认全部拦截）。
+# electron 的 postinstall 负责解压二进制，electron-winstaller 负责拉 NSIS 工具链，esbuild 需要装平台可执行文件。
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true

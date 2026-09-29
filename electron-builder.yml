@@ -1,0 +1,48 @@
+# 打包配置。更新源暂按 GitHub Releases；换国内可达的镜像时只需改 publish，不改代码。
+appId: dev.css.toolbox
+productName: 工具箱
+copyright: Copyright © 2026 css
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - '!**/*.map'
+
+asar: true
+asarUnpack:
+  # 按需下载的插件解压目录在 userData 下，不受 asar 影响；这里只解包宿主自身的可选依赖
+  - node_modules/extract-zip/**
+
+forceCodeSigning: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+  # 无证书时 electron-builder 会跳过签名；SmartScreen 会弹「Windows 已保护你的电脑」，需用户点「仍要运行」。
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: ${productName}
+  deleteAppDataOnUninstall: false
+  differentialPackage: true
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.utilities
+
+publish:
+  provider: github
+  owner: 1263229887
+  repo: toolbox-desktop
+  releaseType: release

@@ -1,0 +1,41 @@
+/* 桌面外壳相关的非原子样式：拖拽区、macOS 红绿灯避让、滚动容器。UnoCSS 表达不了这些。 */
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag,
+.no-drag * {
+  -webkit-app-region: no-drag;
+}
+
+/* macOS 用 hiddenInset，红绿灯压在侧栏左上角，需要留出避让高度 */
+html[data-platform='darwin'] .titlebar-reserve {
+  padding-top: 28px;
+}
+
+.scroll-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* 数字用等宽，避免解析结果条数、文件大小在跳动时改变布局 */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

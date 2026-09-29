@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      解析出来的图片/视频直链来自任意 CDN（douyinpic、zjcdn、byteimg…），host 名单跟不上现实，
+      所以 img/media 放到 https: 级别。脚本仍然只允许自身与插件协议，外链一律不给执行机会。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' toolbox-plugin:; style-src 'self' 'unsafe-inline' toolbox-plugin:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ws://localhost:* http://localhost:* toolbox-plugin:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <title>工具箱</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

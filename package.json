@@ -1,0 +1,35 @@
+{
+  "name": "toolbox-desktop",
+  "version": "0.1.0",
+  "description": "桌面工具箱合集：插件式工具宿主（Electron + Vue3）",
+  "main": "out/main/index.js",
+  "author": "css",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "dist": "electron-vite build && electron-builder",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "check:parse": "node tools/check-parse.mjs",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.137",
+    "electron-updater": "^6.8.9",
+    "extract-zip": "^2.0.1",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "unocss": "^66.10.5",
+    "vite": "^7.3.6",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
+  }
+}

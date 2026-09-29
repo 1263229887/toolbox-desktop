@@ -13,7 +13,7 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL
 
 // 协议必须在 app ready 之前声明特权，否则渲染进程拿不到 fetch/import 语义
 protocol.registerSchemesAsPrivileged([
-  { scheme: PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: PROTOCOL, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ])
 
 const gotLock = app.requestSingleInstanceLock()

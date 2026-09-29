@@ -64,7 +64,9 @@ export async function ensure(id, onProgress) {
   try {
     await downloadFile(url, zipPath, {
       headers: { 'User-Agent': UA.desktop },
-      timeout: 3600000,
+      // 整段请求（含读 body）的上限。GitHub 直连一两百 KB/s，32MB 可能要十几分钟
+      timeout: 7200000,
+      retries: 10,
       totalHint: pack.size,
       onProgress: (p) => onProgress?.({ id, phase: 'downloading', received: p.received, total: pack.size || p.total }),
     })

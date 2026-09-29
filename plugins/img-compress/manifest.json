@@ -6,7 +6,7 @@
   "category": "图像",
   "version": "0.1.0",
   "entry": "dist/index.js",
-  "style": "dist/index.css",
+  "style": "",
   "minHostVersion": "0.1.0",
   "capabilities": ["dialog:pickFiles", "dialog:pickFolder", "files:read", "files:writeBatch", "shell:openPath"]
 }

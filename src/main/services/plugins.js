@@ -2,10 +2,20 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { app } from 'electron'
 import extractZip from 'extract-zip'
 import { request, downloadFile, UA } from './netio.js'
 import { read as readSettings } from './settings.js'
+
+function isRemote(src) {
+  return /^https?:\/\//i.test(src)
+}
+
+/** 清单/zip 可以是本地绝对路径或 file://，方便断网联调 */
+function toLocalPath(src) {
+  return src.startsWith('file://') ? fileURLToPath(src) : path.resolve(src)
+}
 
 export const PROTOCOL = 'toolbox-plugin'
 const ID_RE = /^[a-z0-9][a-z0-9._-]{1,40}$/
@@ -71,9 +81,14 @@ export async function listInstalled() {
 export async function fetchRegistry() {
   const cfg = await readSettings()
   if (!cfg.pluginRegistryUrl) throw new Error('未配置插件清单地址')
-  const res = await request(cfg.pluginRegistryUrl, { headers: { 'User-Agent': UA.desktop, Accept: 'application/json' }, timeout: 20000 })
-  if (!res.ok) throw new Error(`清单获取失败 HTTP ${res.status}`)
-  const data = res.json()
+  let data
+  if (isRemote(cfg.pluginRegistryUrl)) {
+    const res = await request(cfg.pluginRegistryUrl, { headers: { 'User-Agent': UA.desktop, Accept: 'application/json' }, timeout: 20000 })
+    if (!res.ok) throw new Error(`清单获取失败 HTTP ${res.status}`)
+    data = res.json()
+  } else {
+    data = JSON.parse(await fsp.readFile(toLocalPath(cfg.pluginRegistryUrl), 'utf8'))
+  }
   const list = Array.isArray(data.plugins) ? data.plugins : []
   return { generatedAt: data.generatedAt || '', plugins: list }
 }
@@ -86,7 +101,14 @@ export async function install(entry, onProgress) {
   if (!ID_RE.test(entry.id)) throw new Error(`非法插件 id：${entry.id}`)
   if (!entry.file) throw new Error('清单条目缺少 file 字段')
   const cfg = await readSettings()
-  const url = /^https?:\/\//.test(entry.file) ? entry.file : new URL(entry.file, cfg.pluginRegistryUrl).toString()
+  let url
+  if (isRemote(entry.file)) {
+    url = entry.file
+  } else if (isRemote(cfg.pluginRegistryUrl)) {
+    url = new URL(entry.file, cfg.pluginRegistryUrl).toString()
+  } else {
+    url = path.resolve(path.dirname(toLocalPath(cfg.pluginRegistryUrl)), decodeURIComponent(entry.file))
+  }
 
   const root = pluginRoot()
   await fsp.mkdir(root, { recursive: true })
@@ -95,7 +117,12 @@ export async function install(entry, onProgress) {
   const stageDir = path.join(tmp, 'stage')
 
   try {
-    await downloadFile(url, zipPath, { onProgress: (p) => onProgress?.({ id: entry.id, phase: 'downloading', ...p }) })
+    if (!isRemote(url)) {
+      await fsp.copyFile(url, zipPath)
+      onProgress?.({ id: entry.id, phase: 'downloading', received: 1, total: 1 })
+    } else {
+      await downloadFile(url, zipPath, { onProgress: (p) => onProgress?.({ id: entry.id, phase: 'downloading', ...p }) })
+    }
     const digest = crypto.createHash('sha256').update(fs.readFileSync(zipPath)).digest('hex')
     if (entry.sha256 && digest !== entry.sha256) throw new Error(`SHA-256 不匹配（期望 ${entry.sha256.slice(0, 12)}…，实际 ${digest.slice(0, 12)}…）`)
 

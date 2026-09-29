@@ -8,16 +8,26 @@
  * 通信用 Electron 的 process.parentPort（utilityProcess 语义），不是 worker_threads 的 parentPort。
  */
 
+import fs from 'node:fs'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 let ort = null
 let inpaintSession = null
 let detectSession = null
 
 async function init(modelDir) {
-  ort = await import(`file://${modelDir}/ort/ort.node.min.mjs`)
-  ort.env.wasm.wasmPaths = `${modelDir}/ort/`
+  // Windows 上 modelDir 是 C:\...，直接当 URL 会被 ESM loader 认成 scheme `c:`。
+  // import / wasmPaths 必须走 pathToFileURL；onnx 用字节传入，避开同一坑。
+  const ortDir = path.join(modelDir, 'ort')
+  const ortUrl = pathToFileURL(path.join(ortDir, 'ort.node.min.mjs')).href
+  ort = await import(ortUrl)
+  ort.env.wasm.wasmPaths = pathToFileURL(ortDir).href + '/'
   ort.env.wasm.numThreads = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 4)))
-  inpaintSession = await ort.InferenceSession.create(`${modelDir}/migan_pipeline_v2.onnx`, { graphOptimizationLevel: 'all', logSeverityLevel: 3 })
-  detectSession = await ort.InferenceSession.create(`${modelDir}/ch_PP-OCRv4_det_mobile.onnx`, { graphOptimizationLevel: 'all', logSeverityLevel: 3 })
+  const inpaint = new Uint8Array(fs.readFileSync(path.join(modelDir, 'migan_pipeline_v2.onnx')))
+  const detect = new Uint8Array(fs.readFileSync(path.join(modelDir, 'ch_PP-OCRv4_det_mobile.onnx')))
+  inpaintSession = await ort.InferenceSession.create(inpaint, { graphOptimizationLevel: 'all', logSeverityLevel: 3 })
+  detectSession = await ort.InferenceSession.create(detect, { graphOptimizationLevel: 'all', logSeverityLevel: 3 })
   return { threads: ort.env.wasm.numThreads }
 }
 

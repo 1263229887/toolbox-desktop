@@ -41,12 +41,20 @@ export async function getJson(url, opts = {}) {
   return res.json()
 }
 
+function describeNetError(e) {
+  const cause = e?.cause
+  const code = cause?.code || e?.code || ''
+  const msg = cause?.message || e?.message || String(e)
+  return code ? `${msg}（${code}）` : msg
+}
+
 /**
  * 流式下载，支持断点续传。先写 .part 再改名，中断不会留下半截文件占用目标名。
- * GitHub Release 资产在国内实测只有 ~180KB/s 且常在几十 MB 处断掉，
- * 没有续传的大文件下载基本注定失败，所以这里默认带 Range 续传 + 有限次重试。
+ * GitHub Release 资产在国内实测只有一两百 KB/s 且常在几十 MB 处断掉，
+ * 没有续传的大文件下载基本注定失败，所以这里默认带 Range 续传 + 多次退避重试。
+ * timeout 是整段请求（含读 body）的上限，大文件要给到小时级。
  */
-export async function downloadFile(url, dest, { headers = {}, timeout = 300000, onProgress, signal, retries = 4, totalHint = 0 } = {}) {
+export async function downloadFile(url, dest, { headers = {}, timeout = 7200000, onProgress, signal, retries = 8, totalHint = 0 } = {}) {
   await fsp.mkdir(path.dirname(dest), { recursive: true })
   const tmpPath = `${dest}.part`
   const expected = Number(totalHint) || 0
@@ -65,8 +73,12 @@ export async function downloadFile(url, dest, { headers = {}, timeout = 300000, 
     try {
       res = await fetch(url, { headers: send, signal: signal || AbortSignal.timeout(timeout), redirect: 'follow' })
     } catch (e) {
-      if (attempt < retries) continue
-      throw e
+      if (attempt < retries) {
+        // 连接层失败（fetch failed / ECONNRESET）不退避会瞬间打满重试
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)))
+        continue
+      }
+      throw new Error(`下载失败：${describeNetError(e)}（已重试 ${retries} 次）`)
     }
     if (have && res.status === 200) have = 0 // 源不支持 Range，只能整份重来
     if (!res.ok && res.status !== 206) throw new Error(`下载失败 HTTP ${res.status}`)
@@ -86,15 +98,18 @@ export async function downloadFile(url, dest, { headers = {}, timeout = 300000, 
     } catch (e) {
       stream.destroy()
       if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)))
         continue
       }
-      throw e
+      throw new Error(`下载中断：${describeNetError(e)}（已收 ${received} 字节，可续传重试）`)
     }
     await new Promise((r, j) => stream.end((e) => (e ? j(e) : r())))
     if (total && received < total) {
-      if (attempt < retries) continue
-      throw new Error(`下载不完整（${received}/${total} 字节）`)
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)))
+        continue
+      }
+      throw new Error(`下载不完整（${received}/${total} 字节），请重试续传`)
     }
     await fsp.rename(tmpPath, dest)
     return { size: received, path: dest }

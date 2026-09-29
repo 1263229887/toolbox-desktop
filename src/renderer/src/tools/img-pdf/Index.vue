@@ -166,7 +166,7 @@ async function onDrop(e) {
 
       <div v-if="error" class="mb-3 rounded-md border border-#f3d5b3 bg-#fdf6ec px-3 py-2 text-12px text-#8a5a1a">{{ error }}</div>
 
-      <ul v-if="files.length" class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
+      <ul v-if="files.length" class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
         <li v-for="(item, index) in files" :key="item.path" class="card group relative overflow-hidden">
           <img :src="item.url" class="h-28 w-full bg-surface-sunken object-contain" :alt="item.name" />
           <div class="flex items-center justify-between gap-1 border-t border-surface-line px-1.5 py-1">

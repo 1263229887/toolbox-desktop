@@ -191,29 +191,29 @@ onBeforeUnmount(() => {
 .cmp {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--tb-space-3, 12px);
 }
 .cmp-bar,
 .cmp-opts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: var(--tb-space-3, 10px);
 }
 .cmp-opts label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: #4a5158;
+  font-size: var(--tb-fs-secondary, 12px);
+  color: var(--tb-ink-2, #4a5158);
 }
 .cmp-opts input,
 .cmp-opts select {
-  height: 28px;
-  padding: 0 6px;
-  border: 1px solid #d0d5db;
-  border-radius: 6px;
-  background: #fff;
+  height: var(--tb-h-md, 28px);
+  padding: 0 var(--tb-space-2, 6px);
+  border: 1px solid var(--tb-line-strong, #d0d5db);
+  border-radius: var(--tb-radius-md, 6px);
+  background: var(--tb-surface-raised, #fff);
   font: inherit;
 }
 .cmp-opts input[type='number'] {
@@ -223,13 +223,13 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  height: var(--tb-h-lg, 30px);
   padding: 0 12px;
-  border: 1px solid #e3e6ea;
-  border-radius: 6px;
-  background: #eef0f3;
-  color: #1b1f24;
-  font-size: 13px;
+  border: 1px solid var(--tb-line, #e3e6ea);
+  border-radius: var(--tb-radius-md, 6px);
+  background: var(--tb-surface-sunken, #eef0f3);
+  color: var(--tb-ink-1, #1b1f24);
+  font-size: var(--tb-fs-body, 13px);
   cursor: pointer;
 }
 .cmp-btn:disabled {
@@ -237,9 +237,9 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 .cmp-btn-primary {
-  background: #2f6fed;
-  border-color: #2f6fed;
-  color: #fff;
+  background: var(--tb-accent, #2f6fed);
+  border-color: var(--tb-accent, #2f6fed);
+  color: var(--tb-surface-raised, #fff);
 }
 .cmp-dot {
   width: 6px;
@@ -249,23 +249,23 @@ onBeforeUnmount(() => {
   opacity: 0.7;
 }
 .cmp-hint {
-  font-size: 12px;
-  color: #7b848d;
+  font-size: var(--tb-fs-secondary, 12px);
+  color: var(--tb-ink-3, #7b848d);
   font-variant-numeric: tabular-nums;
 }
 .cmp-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--tb-fs-secondary, 12px);
 }
 .cmp-table th,
 .cmp-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid #e3e6ea;
+  border-bottom: 1px solid var(--tb-line, #e3e6ea);
   text-align: left;
 }
 .cmp-table th {
-  color: #7b848d;
+  color: var(--tb-ink-3, #7b848d);
   font-weight: 500;
 }
 .cmp-table .num {
@@ -283,21 +283,21 @@ onBeforeUnmount(() => {
   background: none;
   color: #d4453b;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--tb-fs-secondary, 12px);
 }
 .cmp-empty {
   padding: 48px 0;
   text-align: center;
-  color: #7b848d;
-  font-size: 12px;
-  border: 1px dashed #d0d5db;
-  border-radius: 8px;
+  color: var(--tb-ink-3, #7b848d);
+  font-size: var(--tb-fs-secondary, 12px);
+  border: 1px dashed var(--tb-line-strong, #d0d5db);
+  border-radius: var(--tb-radius-lg, 8px);
 }
 .cmp-warn,
 .cmp-ok {
   padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--tb-radius-md, 6px);
+  font-size: var(--tb-fs-secondary, 12px);
 }
 .cmp-warn {
   background: #fdf6ec;
@@ -313,8 +313,8 @@ onBeforeUnmount(() => {
   margin-left: 8px;
   border: none;
   background: none;
-  color: #2f6fed;
+  color: var(--tb-accent, #2f6fed);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--tb-fs-secondary, 12px);
 }
 </style>

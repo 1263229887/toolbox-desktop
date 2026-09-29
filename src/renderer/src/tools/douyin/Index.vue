@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
           @keydown="onKey"
         />
         <div class="flex w-40 flex-none flex-col gap-2">
-          <button class="btn-primary h-9" :disabled="!canParse" @click="parse">
+          <button class="btn-primary btn-lg" :disabled="!canParse" @click="parse">
             <span v-if="stage === 'parsing'" class="i-lucide-loader-2 size-4 animate-spin" />
             <span v-else class="i-lucide-zap size-4" />
             {{ stage === 'parsing' ? '解析中' : '开始解析' }}
@@ -195,7 +195,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <ul v-if="images.length" class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
+      <ul v-if="images.length" class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
         <li v-for="(item, index) in images" :key="item.url" class="relative">
           <!-- 点图看大图，勾选决定下载哪些：壁纸场景里「先看清楚」比「先选中」更高频 -->
           <button

@@ -1,0 +1,76 @@
+/*
+ * 宿主设计令牌。桌面工具型界面：4px 基准、控件三档高度、层级靠边框不靠阴影。
+ *
+ * 为什么用 CSS 变量而不是只写在 uno.config.js 里：
+ * 按需下载的插件是独立构建的，宿主的原子类扫不到它的源码。把令牌挂到 :root，
+ * 插件用 var(--tb-*) 就能继承主题（每个引用都带 fallback，插件单独打开也不塌）。
+ *
+ * 反模式（这一版刻意没做）：
+ *  - 不用阴影表达层级：密集界面里多层阴影会糊成一片，边框 + 底色台阶更清楚；
+ *  - 不做 hover 位移/放大：工具箱一天点开上百次，位移动效只让人觉得慢；
+ *  - 不混用 5/7/9px 这类凑出来的间距：只允许 --tb-space-* 的台阶；
+ *  - 状态色不只给图标：图标跟语义色，底色只在必须强调时用。
+ */
+:root {
+  /* 间距：4 的倍数，命名按用途而非数值 */
+  --tb-space-1: 4px;
+  --tb-space-2: 8px;
+  --tb-space-3: 12px;
+  --tb-space-4: 16px;
+  --tb-space-5: 20px;
+  --tb-space-6: 24px;
+  --tb-space-8: 32px;
+
+  /* 控件高度三档：紧凑行内 / 常规 / 主操作 */
+  --tb-h-sm: 24px;
+  --tb-h-md: 28px;
+  --tb-h-lg: 34px;
+  --tb-row: 28px;
+
+  /* 字号：13 是正文基准，桌面端比 Web 小一档 */
+  --tb-fs-caption: 11px;
+  --tb-fs-secondary: 12px;
+  --tb-fs-body: 13px;
+  --tb-fs-title: 14px;
+  --tb-fs-page: 15px;
+
+  --tb-radius-sm: 4px;
+  --tb-radius-md: 6px;
+  --tb-radius-lg: 8px;
+
+  --tb-surface-base: #f6f7f9;
+  --tb-surface-raised: #ffffff;
+  --tb-surface-sunken: #eceef2;
+  --tb-surface-hover: #e4e7ec;
+  --tb-line: #e4e7ea;
+  --tb-line-strong: #d1d6dd;
+
+  --tb-ink-1: #1b1f24;
+  --tb-ink-2: #4a5158;
+  --tb-ink-3: #7b848d;
+  --tb-ink-4: #a8b0b9;
+
+  --tb-accent: #2f6fed;
+  --tb-accent-hover: #255fd0;
+  --tb-accent-soft: #eaf1ff;
+  --tb-ok: #1ea672;
+  --tb-warn: #d98324;
+  --tb-danger: #d4453b;
+
+  --tb-focus: 0 0 0 2px var(--tb-accent-soft);
+  --tb-shadow-overlay: 0 18px 48px rgba(16, 22, 30, 0.28);
+
+  /* 动效：产品型界面一律短，位移小 */
+  --m-enter: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --m-move: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --m-standard: 180ms;
+  --m-micro: 120ms;
+  --m-shift: 6px;
+}
+
+/* 减弱动态效果：只去位移，保留淡入与颜色变化 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --m-shift: 0px;
+  }
+}

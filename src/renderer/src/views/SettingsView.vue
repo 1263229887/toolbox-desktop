@@ -46,7 +46,7 @@ async function resetAll() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-2xl px-6 py-5">
+  <div class="mx-auto max-w-[680px] px-5 py-5">
     <div v-if="saved" class="mb-3 flex items-center gap-2 rounded-md border border-#b7e3cc bg-#effaf3 px-3 py-2 text-12px text-#1c6b40">
       <span class="i-lucide-check size-3.5" /><span>{{ saved }}</span>
       <button class="i-lucide-x ml-auto size-3.5 text-ink-3" @click="saved = ''" />

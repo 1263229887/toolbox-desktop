@@ -43,7 +43,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-6 py-5">
+  <div class="mx-auto max-w-[760px] px-5 py-5">
     <div v-if="error" class="mb-3 rounded-md border border-#f3c6c2 bg-#fdf1f0 px-3 py-2 text-12px text-#8c2c25">{{ error }}</div>
 
     <section class="mb-6">

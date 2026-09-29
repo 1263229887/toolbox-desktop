@@ -53,7 +53,7 @@ function goTool(tool) {
           v-for="item in nav"
           :key="item.to"
           :to="item.to"
-          class="flex h-8 items-center gap-2.5 rounded-md px-2.5 text-13px text-ink-2 transition-colors duration-150 hover:bg-#e6e9ee hover:text-ink-1"
+          class="flex h-8 items-center gap-3 rounded-md px-2.5 text-13px text-ink-2 transition-colors duration-150 hover:bg-#e6e9ee hover:text-ink-1"
           :class="route.path === item.to ? 'bg-accent-soft text-accent font-500' : ''"
         >
           <span :class="[item.icon, 'size-4']" />
@@ -66,7 +66,7 @@ function goTool(tool) {
         <button
           v-for="tool in quickTools"
           :key="tool.id"
-          class="no-drag flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-13px transition-colors duration-150"
+          class="no-drag flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-left text-13px transition-colors duration-150"
           :class="[
             route.params.id === tool.id ? 'bg-surface-raised text-ink-1 font-500 shadow-xs' : 'text-ink-2 hover:bg-#e6e9ee hover:text-ink-1',
             tool.status !== 'ready' ? 'opacity-50 cursor-default' : '',

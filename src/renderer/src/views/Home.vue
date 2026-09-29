@@ -35,7 +35,7 @@ onMounted(() => refresh())
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl px-6 py-5">
+  <div class="mx-auto max-w-[880px] px-5 py-5">
     <div class="mb-4 flex items-center gap-3">
       <div class="relative flex-1">
         <span class="i-lucide-search pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ink-4" />
@@ -48,7 +48,7 @@ onMounted(() => refresh())
 
     <section v-for="group in grouped" :key="group.category" class="mb-6">
       <h2 class="label mb-2">{{ group.category }}</h2>
-      <ul class="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-2.5">
+      <ul class="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-3">
         <li v-for="tool in group.items" :key="tool.id" :style="{ '--d': `${tool.delay}ms` }" class="tool-enter">
           <button
             class="card group flex h-full w-full items-start gap-3 p-3 text-left transition-[background-color,border-color,transform] duration-150"

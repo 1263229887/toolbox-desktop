@@ -60,7 +60,7 @@ watch(() => route.params.id, (id) => resolve(id), { immediate: true })
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl px-6 py-5">
+  <div class="mx-auto max-w-[980px] px-5 py-5">
     <p v-if="loading" class="muted">加载中…</p>
     <div v-else-if="error" class="card border-#f3c9c5 bg-#fdf1f0 p-4 text-danger">
       {{ error }}

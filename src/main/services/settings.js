@@ -10,9 +10,9 @@ const DEFAULTS = {
   parseStrategy: 'auto',
   demoApiHost: DEMO_HOST_DEFAULT,
   nologoEndpoint: 'https://nologo.code24.top/api/open/parse',
-  // 兜底接口的 token 直接内置：这是按次计费的自有账号，空着等于第三层链路永远不生效。
-  // 注意它会随安装包分发出去，任何拿到安装包的人都能读到，用量失控时在这里换掉。
-  nologoToken: 'nologo_37f0a104dcb',
+  // 按次计费的凭证不写进代码：仓库是公开的，源码和安装包里的任何常量都等于公开。
+  // 放在 userData/secrets.json 里（见下），或在设置页自己填。
+  nologoToken: '',
   // 按需下载插件的清单地址，第一阶段指向本仓库 Release 资产
   pluginRegistryUrl: 'https://github.com/1263229887/toolbox-desktop/releases/download/registry/plugins.json',
   // 留空 = 用 model-registry.js 里登记的地址（GitHub Release）。
@@ -32,10 +32,18 @@ function file() {
 export async function read() {
   if (cache) return cache
   try {
-    const raw = await fsp.readFile(file(), 'utf8')
-    cache = { ...DEFAULTS, ...JSON.parse(raw) }
+    cache = { ...DEFAULTS, ...JSON.parse(await fsp.readFile(file(), 'utf8')) }
   } catch {
     cache = { ...DEFAULTS }
+  }
+  // 本机凭证文件只在存在时生效，且优先级低于用户在设置页里显式填的值
+  if (!cache.nologoToken) {
+    try {
+      const s = JSON.parse(await fsp.readFile(path.join(app.getPath('userData'), 'secrets.json'), 'utf8'))
+      if (s.nologoToken) cache.nologoToken = s.nologoToken
+    } catch {
+      /* 没有本机凭证就是没配，兜底层会被自动跳过 */
+    }
   }
   return cache
 }

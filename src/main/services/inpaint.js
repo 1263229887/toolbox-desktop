@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { app, utilityProcess } from 'electron'
-import { ensure, modelDir, status as modelStatus } from './models.js'
+import { ensure, modelDir, remove as removeModel, status as modelStatus } from './models.js'
 
 // 主进程会被 rollup 切成 chunk，import.meta.url 的目录不稳定；worker 是独立产物，
 // 只能按「应用根目录/out/main/worker/inpaint.js」定位（dev 是项目根，打包后是 app.asar）
@@ -83,6 +83,13 @@ export async function wmDetect({ image, w, h }) {
 export async function wmInpaint({ image, mask, w, h }) {
   await ensureReady()
   return call('inpaint', { image, mask, w, h }, 600000)
+}
+
+export async function wmRemove(id = 'migan') {
+  // 先杀 worker：模型文件被占用时删目录会失败，也避免下次请求还打到已卸载的模型
+  wmShutdown()
+  ready.delete(id)
+  return removeModel(id)
 }
 
 export function wmShutdown() {

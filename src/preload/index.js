@@ -25,6 +25,7 @@ const INVOKE = new Set([
   'wm:prepare',
   'wm:detect',
   'wm:inpaint',
+  'wm:remove',
   'update:check',
   'update:download',
   'update:install',

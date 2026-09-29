@@ -132,7 +132,7 @@ async function detect({ image, w, h }) {
     const full = { x0: Math.max(0, Math.floor(b.x0 * sx)), y0: Math.max(0, Math.floor(b.y0 * sy)), x1: Math.min(w - 1, Math.ceil(b.x1 * sx)), y1: Math.min(h - 1, Math.ceil(b.y1 * sy)) }
     const score = scoreCandidate(image, w, h, full)
     if (score <= 0) continue
-    boxes.push({ ...full, score: Number(score.toFixed(3)) })
+    boxes.push({ ...full, score: Number(Math.min(1, score).toFixed(3)) })
   }
   // 同一行的碎片（逐字检测出来的）合并成一条，避免漏字
   return mergeRows(boxes).sort((a, b) => b.score - a.score).slice(0, 12)

@@ -170,3 +170,42 @@
   display: flex;
   justify-content: space-between;
 }
+
+/* 一键形态新增元素 */
+.wm-adv {
+  padding: var(--tb-space-2, 8px) var(--tb-space-3, 12px);
+  border: 1px dashed var(--tb-line-strong, #d0d5db);
+  border-radius: var(--tb-radius-md, 6px);
+  background: var(--tb-surface-base, #f6f7f9);
+}
+.wm-adv-label {
+  font-size: var(--tb-fs-secondary, 12px);
+  color: var(--tb-ink-3, #7b848d);
+}
+.wm-done {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-2, 8px);
+  padding: var(--tb-space-2, 8px) var(--tb-space-3, 12px);
+  border: 1px solid #b7e3cc;
+  border-radius: var(--tb-radius-md, 6px);
+  background: #effaf3;
+  color: #1c6b40;
+  font-size: var(--tb-fs-secondary, 12px);
+}
+.wm-done-hint {
+  color: var(--tb-ink-3, #7b848d);
+}
+.wm-spin {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: wm-rot 0.7s linear infinite;
+}
+@keyframes wm-rot {
+  to {
+    transform: rotate(360deg);
+  }
+}

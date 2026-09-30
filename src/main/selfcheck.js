@@ -68,6 +68,11 @@ export async function runSelfcheck() {
     const listed = await plugins.listInstalled()
     check('宿主能扫描到已安装插件', listed.some((p) => p.id === installed.id && p.entryExists))
 
+    // 插件契约：自带 Vue 的包必须导出 mount()，宿主用 <component :is> 会变成两套响应式
+    const entrySrc = fs.readFileSync(entryFile, 'utf8')
+    check('插件入口导出 mount() 契约', /export\s*\{[^}]*\bmount\b/.test(entrySrc) || /export function mount/.test(entrySrc))
+    check('插件样式已内联进 JS', entrySrc.includes('data-cmp-style'))
+
     let crossed = false
     try {
       plugins.resolveWithin(installed.id, '../../etc/passwd')

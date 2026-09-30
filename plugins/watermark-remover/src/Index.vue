@@ -16,6 +16,9 @@ const dl = ref(null)
 const after = ref('')
 const compare = ref(false)
 const stage = ref(null)
+// 一键形态：默认自动出结果，微调面板收起；applied 决定画布显示修复后还是原图
+const applied = ref(false)
+const advanced = ref(false)
 
 let brushCanvas = null
 let brushCtx = null
@@ -109,8 +112,15 @@ async function detect() {
   try {
     const list = await api.call('wm:detect', toRawImage())
     boxes.value = list.map((b) => ({ ...b, on: true }))
+    if (!boxes.value.length) {
+      err.value = '没找到疑似水印，展开「微调」用画笔涂一下要修的区域'
+      advanced.value = true
+      draw()
+      return
+    }
     draw()
-    if (!boxes.value.length) err.value = '没找到疑似水印的文字区域，可用画笔手动涂一下'
+    // 一键：检测到就直接修，不满意再点「微调」
+    await run()
   } catch (e) {
     err.value = e.message
   } finally {
@@ -154,23 +164,41 @@ function draw() {
   el.height = h
   const g = el.getContext('2d')
   const data = g.createImageData(w, h)
-  const src = compare.value && img.value.resultRgb ? img.value.resultRgb : rgb
+  // 一键之后画布默认显示修复结果；按住对比才回原图；撤销后也回原图
+  const showing = compare.value || !applied.value ? rgb : img.value.resultRgb || rgb
   for (let i = 0, j = 0; i < w * h; i++, j += 4) {
-    data.data[j] = src[i * 3]
-    data.data[j + 1] = src[i * 3 + 1]
-    data.data[j + 2] = src[i * 3 + 2]
+    data.data[j] = showing[i * 3]
+    data.data[j + 1] = showing[i * 3 + 1]
+    data.data[j + 2] = showing[i * 3 + 2]
     data.data[j + 3] = 255
   }
   g.putImageData(data, 0, 0)
   const mask = buildMask()
-  g.fillStyle = 'rgba(255,64,96,0.42)'
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (mask[y * w + x]) g.fillRect(x, y, 1, 1)
+  // 结果已应用时不再糊红罩子，只留框线：用户要看的是修完的图，不是选区
+  if (!applied.value || compare.value) {
+    g.fillStyle = 'rgba(255,64,96,0.42)'
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (mask[y * w + x]) g.fillRect(x, y, 1, 1)
+  }
   g.lineWidth = Math.max(1, w / 600)
   g.strokeStyle = 'rgba(255,255,255,0.85)'
   for (const b of boxes.value) {
     if (!b.on) continue
     g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0)
   }
+}
+
+/** 撤销不是删除结果：保留 resultRgb，用户还能点「恢复」切回来 */
+function undo() {
+  applied.value = false
+  compare.value = false
+  advanced.value = true
+  draw()
+}
+
+function redo() {
+  if (!img.value?.resultRgb) return
+  applied.value = true
+  draw()
 }
 
 function eventPoint(e) {
@@ -234,12 +262,18 @@ async function run() {
     img.value.result = new Uint8Array(await blob.arrayBuffer())
     img.value.resultRgb = res.image
     after.value = 'done'
+    applied.value = true
     draw()
   } catch (e) {
     err.value = e.message
   } finally {
     busy.value = ''
   }
+}
+
+function oneClick() {
+  if (!img.value) return open()
+  return detect()
 }
 
 async function save() {
@@ -266,7 +300,21 @@ onBeforeUnmount(() => {
   <div class="wm">
     <div class="wm-bar">
       <button class="wm-btn wm-btn-primary" @click="open"><span class="wm-dot" />打开图片</button>
-      <button class="wm-btn" :disabled="!img || !ready || !!busy" @click="detect">重新识别</button>
+      <!-- 一键：检测完直接修，不满意再展开微调 -->
+      <button class="wm-btn" :disabled="!img || !ready || !!busy" @click="oneClick">
+        <span v-if="busy" class="wm-spin" />{{ busy || '一键去水印' }}
+      </button>
+      <button class="wm-btn" :disabled="!img" @click="advanced = !advanced">{{ advanced ? '收起微调' : '微调' }}</button>
+      <div class="wm-right">
+        <button v-if="applied" class="wm-btn" @pointerdown="compare = true; draw()" @pointerup="compare = false; draw()" @pointerleave="compare && (compare = false, draw())">按住看原图</button>
+        <button v-if="applied" class="wm-btn" @click="undo">撤销</button>
+        <button v-else-if="img?.resultRgb" class="wm-btn wm-btn-primary" @click="redo">恢复结果</button>
+        <button class="wm-btn wm-btn-primary" :disabled="!img?.result" @click="save">保存 PNG</button>
+      </div>
+    </div>
+
+    <div v-show="advanced && img" class="wm-bar wm-adv">
+      <span class="wm-adv-label">微调</span>
       <div class="wm-seg">
         <button :class="{ on: mode === 'box' }" @click="mode = 'box'">点选框</button>
         <button :class="{ on: mode === 'brush' }" @click="mode = 'brush'">画笔补</button>
@@ -276,13 +324,15 @@ onBeforeUnmount(() => {
         <input v-model.number="brush" type="range" min="6" max="120" />
         <span class="wm-num">{{ brush }}</span>
       </label>
-      <button class="wm-btn" :disabled="!img" @click="clearBrush">擦掉笔迹</button>
-      <div class="wm-right">
-        <button v-if="after" class="wm-btn" @pointerdown="compare = true; draw()" @pointerup="compare = false; draw()" @pointerleave="compare && (compare = false, draw())">按住看修复前</button>
-        <button class="wm-btn" :disabled="!img || !hasMask || !!busy" @click="run">{{ busy || '执行修复' }}</button>
-        <button class="wm-btn wm-btn-primary" :disabled="!img?.result" @click="save">保存 PNG</button>
-      </div>
+      <button class="wm-btn" @click="clearBrush">擦掉笔迹</button>
+      <button class="wm-btn" :disabled="!ready || !!busy" @click="detect">重新识别</button>
+      <button class="wm-btn wm-btn-primary" :disabled="!hasMask || !!busy" @click="run">按选区修复</button>
     </div>
+
+    <p v-if="applied" class="wm-done">
+      已自动处理 {{ boxes.filter((b) => b.on).length }} 处
+      <span class="wm-done-hint">不满意就点「微调」改选区，或「撤销」回到原图</span>
+    </p>
 
     <div v-if="!ready" class="wm-note">
       <div class="wm-note-body">
@@ -302,7 +352,7 @@ onBeforeUnmount(() => {
 
     <div class="wm-stage">
       <canvas v-if="img" ref="stage" class="wm-canvas" :class="{ brush: mode === 'brush' }" @pointerdown="onDown" @pointermove="onMove" @pointerup="painting = false" @pointerleave="painting = false" />
-      <p v-else-if="!img" class="wm-empty">打开一张图片开始。程序会自动找出疑似水印的文字，你可以点掉误判、再用画笔补上漏掉的。</p>
+      <p v-else-if="!img" class="wm-empty">打开一张图片即可，程序会自动找出水印并直接修复。识别不准时再展开「微调」手动框或涂。</p>
     </div>
 
     <div class="wm-foot">

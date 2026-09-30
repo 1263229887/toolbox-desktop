@@ -1,12 +1,22 @@
 {
   "id": "watermark-remover",
   "name": "图片去水印",
-  "summary": "自动识别叠加文字并修复，通用图像、不针对特定平台（需下载 31MB 模型）",
+  "summary": "打开图片即自动检测并修复水印，可撤销、可微调（需下载 31MB 模型）",
   "icon": "i-lucide-eraser",
   "category": "图像",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entry": "dist/index.js",
   "style": "",
   "minHostVersion": "0.1.0",
-  "capabilities": ["dialog:pickFiles", "files:read", "files:writeBatch", "files:save", "shell:openPath", "wm:status", "wm:prepare", "wm:detect", "wm:inpaint"]
+  "capabilities": [
+    "dialog:pickFiles",
+    "files:read",
+    "files:writeBatch",
+    "files:save",
+    "shell:openPath",
+    "wm:status",
+    "wm:prepare",
+    "wm:detect",
+    "wm:inpaint"
+  ]
 }

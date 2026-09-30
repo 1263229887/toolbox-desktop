@@ -4,7 +4,7 @@
   "summary": "打开图片即自动检测并修复水印，可撤销、可微调（需下载 31MB 模型）",
   "icon": "i-lucide-eraser",
   "category": "图像",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "entry": "dist/index.js",
   "style": "",
   "minHostVersion": "0.1.0",

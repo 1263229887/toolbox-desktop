@@ -111,7 +111,10 @@ async function detect() {
   err.value = ''
   try {
     const list = await api.call('wm:detect', toRawImage())
-    boxes.value = list.map((b) => ({ ...b, on: true }))
+    // 实测口径（tools/bench/detect-recall.mjs，7 张真样本）：
+    // 全取 = 命中 6/7 但误伤 6 处；只取分数最高 1 个 = 命中 6/7、误伤 0。
+    // 所以默认只自动应用第一候选，其余留在「微调」里让用户点选。
+    boxes.value = list.map((b, k) => ({ ...b, on: k === 0 }))
     if (!boxes.value.length) {
       err.value = '没找到疑似水印，展开「微调」用画笔涂一下要修的区域'
       advanced.value = true
@@ -121,6 +124,7 @@ async function detect() {
     draw()
     // 一键：检测到就直接修，不满意再点「微调」
     await run()
+    if (boxes.value.length > 1) err.value = `另有 ${boxes.value.length - 1} 处疑似水印未处理，可在「微调」里勾选`
   } catch (e) {
     err.value = e.message
   } finally {

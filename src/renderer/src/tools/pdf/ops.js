@@ -111,3 +111,88 @@ export function parseRange(text, total) {
 export async function save(doc) {
   return doc.save({ useObjectStreams: false })
 }
+
+/** 九宫格位置 → 左下角原点坐标（PDF 的 y 轴向上） */
+export function placementXY(placement, pageW, pageH, w, h, margin = 18) {
+  const [row, col] = {
+    'top-left': ['top', 'left'], 'top-center': ['top', 'center'], 'top-right': ['top', 'right'],
+    'center-left': ['middle', 'left'], 'center': ['middle', 'center'], 'center-right': ['middle', 'right'],
+    'bottom-left': ['bottom', 'left'], 'bottom-center': ['bottom', 'center'], 'bottom-right': ['bottom', 'right'],
+  }[placement] || ['bottom', 'center']
+  const x = col === 'left' ? margin : col === 'right' ? pageW - w - margin : (pageW - w) / 2
+  const y = row === 'top' ? pageH - h - margin : row === 'middle' ? (pageH - h) / 2 : margin
+  return { x, y }
+}
+
+/** 平铺水印的网格坐标（带页内裁剪由调用方决定宽高） */
+export function tilePositions(pageW, pageH, w, h, gapX, gapY, angle) {
+  const out = []
+  const stepX = w + gapX
+  const stepY = h + gapY
+  const reach = angle ? Math.hypot(pageW, pageH) : pageH
+  for (let y = -stepY; y < reach + stepY; y += stepY) {
+    for (let x = -stepX; x < pageW + stepX; x += stepX) {
+      out.push({ x, y: angle ? y : pageH - y - h })
+    }
+  }
+  return out
+}
+
+/**
+ * 给指定页盖一层带透明通道的 PNG —— 文字水印与页码都走这里。
+ * 不嵌字体：pdf-lib 的 embedFont 不处理 .ttc 字体集合（Windows 的中文字体基本都是集合），
+ * 打包中文字体又是几 MB 起步还牵扯授权，所以中文交给 canvas 渲染成图，用系统字体、所见即所得。
+ * makeOverlay(page, index) 返回 { bytes, width, height, x, y, opacity } 或 null（跳过该页）。
+ */
+export async function stampPages(doc, targets, makeOverlay) {
+  const pages = doc.getPages()
+  let stamped = 0
+  for (const i of targets) {
+    const page = pages[i]
+    if (!page) continue
+    const ov = await makeOverlay(page, i)
+    if (!ov || !ov.bytes) continue
+    const img = await doc.embedPng(ov.bytes)
+    page.drawImage(img, { x: ov.x, y: ov.y, width: ov.width, height: ov.height, opacity: ov.opacity ?? 1 })
+    stamped++
+  }
+  return stamped
+}
+
+/** 平铺：同一张图重复贴多次，只嵌一次 */
+export async function tileStamp(doc, targets, overlay) {
+  const pages = doc.getPages()
+  const img = await doc.embedPng(overlay.bytes)
+  let stamped = 0
+  for (const i of targets) {
+    const page = pages[i]
+    if (!page) continue
+    const { width: w, height: h } = overlay
+    for (const pos of tilePositions(page.getWidth(), page.getHeight(), w, h, overlay.gapX, overlay.gapY, overlay.angle)) {
+      page.drawImage(img, { x: pos.x, y: pos.y, width: w, height: h, opacity: overlay.opacity ?? 1, rotate: overlay.angle ? { type: 'deg', value: overlay.angle } : undefined })
+    }
+    stamped++
+  }
+  return stamped
+}
+
+export function readMetadata(doc) {
+  return {
+    title: doc.getTitle() || '',
+    author: doc.getAuthor() || '',
+    subject: doc.getSubject() || '',
+    keywords: doc.getKeywords() || '',
+    creator: doc.getCreator() || '',
+    producer: doc.getProducer() || '',
+  }
+}
+
+export function writeMetadata(doc, meta) {
+  const map = { title: 'setTitle', author: 'setAuthor', subject: 'setSubject', keywords: 'setKeywords', creator: 'setCreator', producer: 'setProducer' }
+  for (const [k, fn] of Object.entries(map)) {
+    if (meta[k] === undefined) continue
+    // setXxx(undefined) 会被 pdf-lib 的校验器拒掉（要求 string），清空只能写空串
+    doc[fn](String(meta[k]))
+  }
+  return doc
+}

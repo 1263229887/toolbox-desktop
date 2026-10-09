@@ -50,6 +50,17 @@ export const BUILTIN_TOOLS = [
     capabilities: ['dialog:pickFiles', 'dialog:pickFolder', 'files:read', 'files:save', 'files:writeBatch'],
     loader: () => import('@/tools/pdf-edit/Index.vue'),
   },
+  {
+    id: 'pdf-stamp',
+    name: 'PDF 编辑',
+    summary: '加文字水印、编页码、改文档属性',
+    icon: 'i-lucide-stamp',
+    category: '文档',
+    source: 'builtin',
+    status: 'ready',
+    capabilities: ['dialog:pickFiles', 'files:read', 'files:save'],
+    loader: () => import('@/tools/pdf-stamp/Index.vue'),
+  },
 ]
 
 const plugins = ref([])

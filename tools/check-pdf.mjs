@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs'
 import { PDFDocument, PDFName } from 'pdf-lib'
-import { load, merge, split, organize, parseRange, replaceJpegImages, jpegSize, save } from '../src/renderer/src/tools/pdf/ops.js'
+import { load, merge, split, organize, parseRange, replaceJpegImages, jpegSize, save, stampPages, tilePositions, placementXY, readMetadata, writeMetadata } from '../src/renderer/src/tools/pdf/ops.js'
 
 let failed = 0
 const check = (label, cond, detail = '') => {
@@ -82,6 +82,37 @@ const guard = await replaceJpegImages(guardDoc, () => new Uint8Array(bigJpeg.len
 check('替换后变大时跳过', guard.images === 0 && guard.skipped === 1, JSON.stringify(guard))
 const noop = await replaceJpegImages(await load(pdfBytes), () => null)
 check('解码失败时保留原图', noop.images === 0 && noop.skipped === 1)
+
+// 7) 盖章式水印 / 页码（不嵌字体那条路线）
+const wmPng = readU8('wm.png')
+const stampDoc = await docWithPages(2)
+const stamped = await stampPages(stampDoc, [0, 1], async (page) => {
+  const { x, y } = placementXY('bottom-right', page.getWidth(), page.getHeight(), 120, 32)
+  return { bytes: wmPng, width: 120, height: 32, x, y, opacity: 0.5 }
+})
+check('两页都盖上水印', stamped === 2, `${stamped} 页`)
+const stampOut = await save(stampDoc)
+const stampBack = await load(stampOut)
+check('盖章后仍可重新载入且页数不变', stampBack.getPageCount() === 2)
+let pngCount = 0
+for (const [, obj] of stampBack.context.enumerateIndirectObjects()) {
+  if (obj?.getContents && String(obj.dict?.get?.(PDFName.of('Filter'))) === '/FlateDecode') pngCount++
+}
+check('PNG 图像已写入 PDF', pngCount >= 2, `${pngCount} 个 Flate 流`)
+
+// 8) 坐标与平铺
+const bl = placementXY('bottom-left', 300, 200, 100, 20)
+const tr = placementXY('top-right', 300, 200, 100, 20)
+check('左下坐标贴边', bl.x === 18 && bl.y === 18, JSON.stringify(bl))
+check('右上坐标不越界', tr.x === 300 - 100 - 18 && tr.y === 200 - 20 - 18, JSON.stringify(tr))
+check('平铺网格覆盖整页', tilePositions(300, 200, 60, 20, 40, 40, 0).length >= 15, `${tilePositions(300, 200, 60, 20, 40, 40, 0).length} 个位置`)
+
+// 9) 元数据
+const metaDoc = await docWithPages(1)
+writeMetadata(metaDoc, { title: '季度报告', author: '张三', subject: '' })
+const metaBack = await load(await save(metaDoc))
+const got = readMetadata(metaBack)
+check('元数据写入并可读回', got.title === '季度报告' && got.author === '张三', JSON.stringify({ t: got.title, a: got.author }))
 
 console.log(failed ? `\n✗ ${failed} 项失败` : '\n✓ 全部通过')
 process.exit(failed ? 1 : 0)

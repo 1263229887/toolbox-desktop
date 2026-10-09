@@ -35,6 +35,30 @@ export function pluginEntryUrl(id, entry = 'dist/index.js') {
   return `${PROTOCOL}://${id}/${entry}`
 }
 
+function registryCacheFile() {
+  return path.join(app.getPath('userData'), 'toolbox', 'registry-cache.json')
+}
+
+function normalizeRegistry(data) {
+  return {
+    generatedAt: data?.generatedAt || '',
+    plugins: Array.isArray(data?.plugins) ? data.plugins : [],
+  }
+}
+
+async function readRegistryCache() {
+  try {
+    return normalizeRegistry(JSON.parse(await fsp.readFile(registryCacheFile(), 'utf8')))
+  } catch {
+    return null
+  }
+}
+
+async function writeRegistryCache(data) {
+  await fsp.mkdir(path.dirname(registryCacheFile()), { recursive: true })
+  await fsp.writeFile(registryCacheFile(), JSON.stringify(data), 'utf8')
+}
+
 function compareVersion(a, b) {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0)
   const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0)
@@ -81,16 +105,21 @@ export async function listInstalled() {
 export async function fetchRegistry() {
   const cfg = await readSettings()
   if (!cfg.pluginRegistryUrl) throw new Error('未配置插件清单地址')
-  let data
-  if (isRemote(cfg.pluginRegistryUrl)) {
-    const res = await request(cfg.pluginRegistryUrl, { headers: { 'User-Agent': UA.desktop, Accept: 'application/json' }, timeout: 20000 })
-    if (!res.ok) throw new Error(`清单获取失败 HTTP ${res.status}`)
-    data = res.json()
-  } else {
-    data = JSON.parse(await fsp.readFile(toLocalPath(cfg.pluginRegistryUrl), 'utf8'))
+  if (!isRemote(cfg.pluginRegistryUrl)) {
+    return { ...normalizeRegistry(JSON.parse(await fsp.readFile(toLocalPath(cfg.pluginRegistryUrl), 'utf8'))), stale: false }
   }
-  const list = Array.isArray(data.plugins) ? data.plugins : []
-  return { generatedAt: data.generatedAt || '', plugins: list }
+
+  try {
+    const res = await request(cfg.pluginRegistryUrl, { headers: { 'User-Agent': UA.desktop, Accept: 'application/json' }, timeout: 10000 })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = normalizeRegistry(res.json())
+    await writeRegistryCache(data)
+    return { ...data, stale: false }
+  } catch (e) {
+    const cached = await readRegistryCache()
+    if (cached) return { ...cached, stale: true }
+    throw new Error('插件市场暂时无法连接，请稍后重试；已安装工具不受影响')
+  }
 }
 
 /**

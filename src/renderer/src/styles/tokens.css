@@ -38,27 +38,30 @@
   --tb-radius-md: 6px;
   --tb-radius-lg: 8px;
 
-  --tb-surface-base: #f6f7f9;
+  --tb-surface-base: #eef1f6;
   --tb-surface-raised: #ffffff;
-  --tb-surface-sunken: #eceef2;
-  --tb-surface-hover: #e4e7ec;
-  --tb-line: #e4e7ea;
-  --tb-line-strong: #d1d6dd;
+  --tb-surface-sunken: #e5eaf2;
+  --tb-surface-hover: #dbe2ee;
+  --tb-line: #d7dee9;
+  --tb-line-strong: #b8c3d3;
 
-  --tb-ink-1: #1b1f24;
-  --tb-ink-2: #4a5158;
-  --tb-ink-3: #7b848d;
-  --tb-ink-4: #a8b0b9;
+  --tb-ink-1: #172033;
+  --tb-ink-2: #526078;
+  --tb-ink-3: #7c899d;
+  --tb-ink-4: #a7b2c2;
 
-  --tb-accent: #2f6fed;
-  --tb-accent-hover: #255fd0;
-  --tb-accent-soft: #eaf1ff;
+  --tb-accent: #3c5ee8;
+  --tb-accent-hover: #304dca;
+  --tb-accent-soft: #e5eaff;
+  --tb-nav: #f8faff;
+  --tb-nav-ink: #172033;
+  --tb-nav-muted: #7c899d;
   --tb-ok: #1ea672;
   --tb-warn: #d98324;
   --tb-danger: #d4453b;
 
   --tb-focus: 0 0 0 2px var(--tb-accent-soft);
-  --tb-shadow-overlay: 0 18px 48px rgba(16, 22, 30, 0.28);
+  --tb-shadow-overlay: 0 18px 48px rgba(16, 22, 30, 0.2);
 
   /* 动效：产品型界面一律短，位移小 */
   --m-enter: cubic-bezier(0.215, 0.61, 0.355, 1);

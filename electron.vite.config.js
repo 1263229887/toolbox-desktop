@@ -13,7 +13,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: ['extract-zip'] })],
     build: {
       external,
-      rollupOptions: { input: { index: 'src/main/index.js', 'worker/inpaint': 'src/main/services/inpaint-worker.js' } },
+      rollupOptions: { input: { index: 'src/main/index.js' } },
     },
   },
   preload: {

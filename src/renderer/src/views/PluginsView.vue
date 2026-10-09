@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, toRaw } from 'vue'
 import ctx from '@/services/ctx'
 import { useTools } from '@/tools/registry'
 
@@ -16,7 +16,8 @@ async function install(entry) {
   error.value = ''
   off = api.on('plugins:progress', (p) => (progress.value = p))
   try {
-    await api.call('plugins:install', { entry })
+    // entry 来自 ref 里的 reactive 代理，直接过 IPC 会被 structuredClone 拒收
+    await api.call('plugins:install', { entry: toRaw(entry) })
     await refresh()
   } catch (e) {
     error.value = e.message
@@ -30,6 +31,11 @@ async function install(entry) {
 async function uninstall(id) {
   await api.call('plugins:uninstall', { id })
   await refresh()
+}
+
+function fmtSize(n) {
+  if (!n) return '未知大小'
+  return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB'
 }
 
 function pct(p) {
@@ -50,7 +56,7 @@ onMounted(() => {
       <div class="mb-2 flex items-center gap-2">
         <h2 class="label">已安装插件</h2>
         <button class="btn-ghost ml-auto h-7" :disabled="refreshing" @click="refresh">
-          <span :class="['i-lucide-refresh-cw size-3.5', refreshing ? 'animate-spin' : '']" />重新读取清单
+          <span :class="['i-lucide-refresh-cw size-3.5', refreshing ? 'animate-spin' : '']" />刷新
         </button>
       </div>
       <p v-if="!plugins.length" class="muted rounded-md border border-dashed border-surface-line-strong px-3 py-6 text-center">还没有安装过插件</p>
@@ -68,15 +74,17 @@ onMounted(() => {
 
     <section>
       <h2 class="label mb-2">可下载</h2>
-      <p v-if="registryError" class="muted rounded-md border border-#f3d5b3 bg-#fdf6ec px-3 py-2 text-12px text-#8a5a1a">清单加载失败：{{ registryError }}</p>
-      <p v-else-if="!downloadable.length" class="muted rounded-md border border-dashed border-surface-line-strong px-3 py-6 text-center">暂时没有可下载的插件（清单为空或都已安装）</p>
+      <p v-if="registryError" class="mb-2 flex items-center gap-2 rounded-md border border-#d7deef bg-#f3f6fc px-3 py-2 text-12px text-ink-2">
+        <span class="i-lucide-cloud-off size-3.5 flex-none" />{{ registryError }}
+      </p>
+      <p v-if="!downloadable.length" class="muted rounded-md border border-dashed border-surface-line-strong px-3 py-6 text-center">暂时没有可下载的插件</p>
       <ul v-else class="space-y-2">
         <li v-for="entry in downloadable" :key="entry.id" class="card flex items-center gap-3 px-3 py-2">
           <span class="flex size-9 flex-none items-center justify-center rounded-md bg-surface-sunken">
             <span :class="[entry.icon || 'i-lucide-puzzle', 'size-4 text-ink-2']" />
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-13px font-500">{{ entry.name }} <span class="muted tabular">v{{ entry.version }} · {{ (entry.size / 1048576).toFixed(1) }} MB</span></span>
+            <span class="block truncate text-13px font-500">{{ entry.name }} <span class="muted tabular">v{{ entry.version }} · {{ fmtSize(entry.size) }}</span></span>
             <span class="muted block truncate">{{ entry.summary }}</span>
             <span v-if="installing === entry.id && progress.total" class="mt-1 block h-1 overflow-hidden rounded bg-surface-sunken">
               <!-- 进度用 scaleX 而不是 width：改宽度每帧都要重排 -->

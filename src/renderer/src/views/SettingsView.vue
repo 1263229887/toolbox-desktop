@@ -5,7 +5,6 @@ import ctx from '@/services/ctx'
 const api = ctx
 const settings = ref(null)
 const appInfo = ref(null)
-const models = ref([])
 const saved = ref('')
 
 const STRATEGIES = [
@@ -18,7 +17,6 @@ const STRATEGIES = [
 onMounted(async () => {
   settings.value = await api.call('settings:get')
   appInfo.value = await api.call('app:info')
-  models.value = await api.call('wm:status').catch(() => [])
 })
 
 async function patch(next, message = '已保存') {
@@ -29,13 +27,6 @@ async function patch(next, message = '已保存') {
 async function pickFolder() {
   const dir = await api.call('dialog:pickFolder', { defaultPath: settings.value.downloadDir })
   if (dir) await patch({ downloadDir: dir }, '下载目录已更新')
-}
-
-async function dropModel(id) {
-  if (!window.confirm('删除后下次使用该工具会重新下载，确定吗？')) return
-  await api.call('wm:remove', { id })
-  models.value = await api.call('wm:status')
-  saved.value = '模型已删除'
 }
 
 async function resetAll() {
@@ -100,29 +91,9 @@ async function resetAll() {
           <span class="label mb-1 block">插件清单地址</span>
           <input class="field w-full" :value="settings.pluginRegistryUrl" data-selectable @change="patch({ pluginRegistryUrl: $event.target.value })" />
         </label>
-        <label class="mt-3 block">
-          <span class="label mb-1 block">模型包源地址（留空用登记的 Release 地址）</span>
-          <input class="field w-full" :value="settings.modelBaseUrl" placeholder="http://127.0.0.1:8000/dist-models" data-selectable @change="patch({ modelBaseUrl: $event.target.value })" />
-        </label>
+
         <p class="muted mt-2">清单是发布在 Release 上的 plugins.json，安装时会校验其中声明的 SHA-256。<span class="text-danger">注意：私有仓库的 Release 资产需要登录鉴权，未登录会 404</span>——要对外分发得把仓库转公开，或换境外对象存储并把地址填到这里。</p>
       </section>
-
-      <section class="card p-4">
-        <div class="label mb-3">离线模型</div>
-        <p class="muted mb-2">按需下载、之后完全离线运行；图片不会离开本机。删除后下次使用会重新下载。</p>
-        <ul v-if="models.length" class="space-y-2">
-          <li v-for="m in models" :key="m.id" class="flex items-center gap-2">
-            <span :class="[m.verified ? 'i-lucide-circle-check text-ok' : 'i-lucide-circle-alert text-warn', 'size-4']" />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-13px">{{ m.name }} <span class="muted tabular">v{{ m.version }}{{ m.bytes ? ' · ' + (m.bytes / 1048576).toFixed(1) + ' MB' : '' }}</span></span>
-              <span class="muted block">{{ m.installed ? (m.verified ? '指纹校验通过' : '已下载但指纹不符，将被拒绝加载') : '未下载' }}</span>
-            </span>
-            <button v-if="m.installed" class="btn-plain h-7" @click="dropModel(m.id)">删除</button>
-          </li>
-        </ul>
-        <p v-else class="muted">当前没有可下载的模型包</p>
-      </section>
-
       <section class="card p-4">
         <div class="label mb-3">更新</div>
         <label class="mb-3 flex items-center gap-2 text-12px">

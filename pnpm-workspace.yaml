@@ -2,6 +2,7 @@
 # electron 的 postinstall 负责解压二进制，electron-winstaller 负责拉 NSIS 工具链，
 # esbuild 需要平台可执行文件，protobufjs（onnxruntime-web 的依赖）要生成运行时。
 allowBuilds:
+  '@alicloud/openapi-core': true
   electron: true
   electron-winstaller: true
   esbuild: true

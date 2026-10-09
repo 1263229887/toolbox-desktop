@@ -10,9 +10,10 @@
   -webkit-app-region: no-drag;
 }
 
-/* macOS 用 hiddenInset，红绿灯压在侧栏左上角，需要留出避让高度 */
-html[data-platform='darwin'] .titlebar-reserve {
-  padding-top: 28px;
+/* macOS hiddenInset 的红绿灯占据左上角：品牌整块放到按钮下方。 */
+html[data-platform='darwin'] .sidebar-brand.titlebar-reserve {
+  height: 116px !important;
+  padding: 52px 16px 12px !important;
 }
 
 .scroll-y {
@@ -28,4 +29,59 @@ html[data-platform='darwin'] .titlebar-reserve {
 /* 数字用等宽，避免解析结果条数、文件大小在跳动时改变布局 */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* The shell keeps its own responsive behavior because Electron windows can be resized
+   independently of the browser viewport. */
+.app-shell {
+  background: var(--tb-surface-base);
+}
+
+.app-sidebar {
+  width: 248px;
+  background: var(--tb-nav);
+  color: var(--tb-nav-ink);
+}
+
+.app-main {
+  min-width: 0;
+  background-color: var(--tb-surface-base);
+  background-image: linear-gradient(rgba(60, 94, 232, 0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(60, 94, 232, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.app-content {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 780px) {
+  .app-sidebar {
+    width: 76px;
+  }
+
+  .app-sidebar .sidebar-wordmark,
+  .app-sidebar .sidebar-nav-label,
+  .app-sidebar .sidebar-tool-name,
+  .app-sidebar .sidebar-footer-copy {
+    display: none;
+  }
+
+  .app-sidebar .sidebar-brand,
+  .app-sidebar .sidebar-nav-link,
+  .app-sidebar .sidebar-tool {
+    justify-content: center;
+  }
+
+  html[data-platform='darwin'] .app-sidebar .sidebar-brand {
+    height: 96px !important;
+    justify-content: center;
+    padding: 52px 0 10px !important;
+  }
+
+  .app-sidebar .sidebar-nav-link,
+  .app-sidebar .sidebar-tool {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }

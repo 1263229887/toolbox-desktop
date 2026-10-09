@@ -22,8 +22,8 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 780,
-    minWidth: 940,
-    minHeight: 600,
+    minWidth: 760,
+    minHeight: 560,
     show: false,
     backgroundColor: '#f7f8fa',
     title: '工具箱',

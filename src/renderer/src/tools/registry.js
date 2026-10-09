@@ -55,16 +55,18 @@ function fromManifest(m) {
 
 export async function refresh() {
   refreshing.value = true
+  registryError.value = ''
   try {
     plugins.value = (await ctx.call('plugins:list')).map(fromManifest)
+    try {
+      const { plugins: list, stale } = await ctx.call('plugins:registry')
+      remote.value = list
+      if (stale) registryError.value = '插件市场暂时离线，正在显示上次成功加载的清单；已安装工具不受影响'
+    } catch (e) {
+      registryError.value = e.message || '插件市场暂时无法连接；已安装工具不受影响'
+    }
   } finally {
     refreshing.value = false
-  }
-  try {
-    const { plugins: list } = await ctx.call('plugins:registry')
-    remote.value = list
-  } catch (e) {
-    registryError.value = e.message
   }
 }
 

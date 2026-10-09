@@ -41,79 +41,81 @@ function goTool(tool) {
 </script>
 
 <template>
-  <div class="flex h-full bg-surface-base text-ink-1">
-    <aside data-chrome class="w-58 flex-none flex flex-col border-r border-surface-line bg-surface-sunken">
-      <div class="drag titlebar-reserve flex h-11 items-center gap-2 px-3">
-        <span class="text-13px font-600 tracking-wide">工具箱</span>
-        <span class="muted tabular">{{ appInfo ? 'v' + appInfo.version : '' }}</span>
+  <div class="app-shell flex h-full text-ink-1">
+    <aside data-chrome class="app-sidebar flex-none flex flex-col border-r border-surface-line">
+      <div class="drag titlebar-reserve sidebar-brand flex h-16 items-center gap-3 px-4">
+        <span class="flex size-8 items-center justify-center rounded-lg bg-accent text-white shadow-[0_0_0_4px_rgba(60,94,232,0.12)]">
+          <span class="i-lucide-sparkles size-4.5" />
+        </span>
+        <span class="sidebar-wordmark min-w-0">
+          <span class="block text-13px font-700 tracking-[0.08em]">TOOLBOX</span>
+          <span class="block text-10px tracking-[0.16em] text-ink-4">PERSONAL WORKBENCH</span>
+        </span>
       </div>
 
-      <nav class="px-2 py-1">
+      <nav class="px-3 py-4">
         <RouterLink
           v-for="item in nav"
           :key="item.to"
           :to="item.to"
-          class="flex h-8 items-center gap-3 rounded-md px-2.5 text-13px text-ink-2 transition-colors duration-150 hover:bg-#e6e9ee hover:text-ink-1"
-          :class="route.path === item.to ? 'bg-accent-soft text-accent font-500' : ''"
+          class="sidebar-nav-link flex h-10 items-center gap-3 rounded-lg px-3 text-13px text-ink-2 transition-colors duration-150 hover:bg-surface-sunken hover:text-ink-1"
+          :class="route.path === item.to ? 'bg-accent-soft text-accent font-600 hover:bg-accent-soft hover:text-accent' : ''"
         >
           <span :class="[item.icon, 'size-4']" />
-          <span>{{ item.label }}</span>
+          <span class="sidebar-nav-label">{{ item.label }}</span>
         </RouterLink>
       </nav>
 
-      <div class="mt-2 flex-1 overflow-y-auto px-2 pb-2">
-        <div class="label px-2.5 py-1.5">已安装</div>
+      <div class="mt-1 flex-1 overflow-y-auto px-3 pb-3">
+        <div class="sidebar-nav-label px-3 py-2 text-10px font-600 tracking-[0.16em] text-ink-4">已安装工具</div>
         <button
           v-for="tool in quickTools"
           :key="tool.id"
-          class="no-drag flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-left text-13px transition-colors duration-150"
+          class="sidebar-tool no-drag flex h-9 w-full items-center gap-3 rounded-lg px-3 text-left text-12px transition-colors duration-150"
           :class="[
-            route.params.id === tool.id ? 'bg-surface-raised text-ink-1 font-500 shadow-xs' : 'text-ink-2 hover:bg-#e6e9ee hover:text-ink-1',
-            tool.status !== 'ready' ? 'opacity-50 cursor-default' : '',
+            route.params.id === tool.id ? 'bg-surface-sunken text-ink-1 font-500' : 'text-ink-2 hover:bg-surface-sunken hover:text-ink-1',
+            tool.status !== 'ready' ? 'opacity-40 cursor-default' : '',
           ]"
           :disabled="tool.status !== 'ready'"
           @click="goTool(tool)"
         >
-          <span :class="[tool.icon, 'size-4 text-ink-3']" />
-          <span class="truncate">{{ tool.name }}</span>
+          <span :class="[tool.icon, 'size-4 text-accent']" />
+          <span class="sidebar-tool-name truncate">{{ tool.name }}</span>
         </button>
       </div>
 
-      <footer class="flex-none border-t border-surface-line px-2 py-2">
+      <footer class="flex-none border-t border-surface-line px-3 py-3">
         <Transition name="tip">
-          <div v-if="update.state !== 'idle'" class="mb-2 rounded-md border border-surface-line bg-surface-raised px-2 py-1.5">
+          <div v-if="update.state !== 'idle'" class="mb-3 rounded-lg border border-surface-line bg-surface-raised px-3 py-2">
             <div class="flex items-center gap-1.5">
-              <span class="truncate text-12px text-ink-2">{{ UPDATE_LABEL[update.state] || update.state }}{{ update.message ? ' · ' + update.message : '' }}</span>
+              <span class="truncate text-11px text-ink-2">{{ UPDATE_LABEL[update.state] || update.state }}{{ update.message ? ' · ' + update.message : '' }}</span>
               <button v-if="update.state === 'available'" class="btn-primary ml-auto h-6 px-2 text-11px" @click="updateAction('download')">下载</button>
               <button v-if="update.state === 'downloaded'" class="btn-primary ml-auto h-6 px-2 text-11px" @click="updateAction('install')">重启安装</button>
               <button v-if="update.state === 'error'" class="btn-ghost ml-auto h-6 px-2 text-11px" @click="updateAction('releasePage')">下载页</button>
             </div>
-            <div v-if="update.state === 'downloading'" class="mt-1 h-1 overflow-hidden rounded bg-surface-sunken">
-              <span
-                class="block h-full w-full origin-left bg-accent transition-transform duration-150"
-                :style="{ transform: `scaleX(${(update.percent || 0) / 100})` }"
-              />
+            <div v-if="update.state === 'downloading'" class="mt-2 h-1 overflow-hidden rounded bg-surface-sunken">
+              <span class="block h-full w-full origin-left bg-accent transition-transform duration-150" :style="{ transform: `scaleX(${(update.percent || 0) / 100})` }" />
             </div>
           </div>
         </Transition>
-        <div class="muted no-drag flex items-center justify-between px-1">
-          <span>Electron {{ appInfo?.electron }}</span>
-          <span>{{ appInfo?.platform }}</span>
+        <div class="sidebar-footer-copy muted no-drag flex items-center justify-between px-1">
+          <span>v{{ appInfo?.version || '0.1.0' }}</span>
+          <span class="uppercase">{{ appInfo?.platform }}</span>
         </div>
       </footer>
     </aside>
 
-    <main class="flex min-w-0 flex-1 flex-col">
-      <header data-chrome class="drag flex h-11 flex-none items-center gap-3 border-b border-surface-line bg-surface-raised px-4">
-        <span class="text-14px font-600">{{ title }}</span>
+    <main class="app-main flex min-w-0 flex-1 flex-col">
+      <header data-chrome class="drag flex h-14 flex-none items-center gap-3 border-b border-surface-line/80 bg-surface-base/85 px-[clamp(16px,3vw,36px)] backdrop-blur-sm">
+        <span class="text-12px font-700 tracking-[0.14em] text-ink-3">{{ title === '全部工具' ? 'WORKBENCH' : title }}</span>
         <span class="no-drag ml-auto flex items-center gap-2">
-          <RouterLink to="/" class="btn-ghost h-7 text-12px" :class="route.name === 'home' ? 'invisible' : ''">
-            <span class="i-lucide-arrow-left size-3.5" />全部工具
+          <RouterLink to="/" class="btn-ghost h-8 text-12px" :class="route.name === 'home' ? 'invisible' : ''">
+            <span class="i-lucide-arrow-left size-3.5" />返回工作台
           </RouterLink>
         </span>
       </header>
 
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <div class="app-content min-h-0 flex-1">
         <RouterView v-slot="{ Component }">
           <Transition name="view" mode="out-in">
             <component :is="Component" />

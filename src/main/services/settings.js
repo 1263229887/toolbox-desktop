@@ -29,6 +29,10 @@ function file() {
   return path.join(app.getPath('userData'), 'settings.json')
 }
 
+function secretsFile() {
+  return path.join(app.getPath('userData'), 'secrets.json')
+}
+
 export async function read() {
   if (cache) return cache
   try {
@@ -57,3 +61,23 @@ export async function write(patch) {
 }
 
 export const defaults = () => ({ ...DEFAULTS })
+
+export async function readSecrets() {
+  try {
+    return JSON.parse(await fsp.readFile(secretsFile(), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+export async function writeSecrets(patch) {
+  const next = { ...(await readSecrets()), ...patch }
+  await fsp.mkdir(path.dirname(secretsFile()), { recursive: true })
+  await fsp.writeFile(secretsFile(), JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 })
+  try {
+    await fsp.chmod(secretsFile(), 0o600)
+  } catch {
+    // Windows does not expose POSIX file modes.
+  }
+  return next
+}

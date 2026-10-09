@@ -2,7 +2,6 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { app, clipboard, dialog, ipcMain, shell } from 'electron'
 import { parse as parseDouyin } from './services/douyin.js'
-import { wmDetect, wmInpaint, wmPrepare, wmRemove, wmShutdown, wmStatus } from './services/inpaint.js'
 import { downloadFile, safeName, stamp, UA } from './services/netio.js'
 import * as plugins from './services/plugins.js'
 import { initUpdater } from './services/updater.js'
@@ -25,6 +24,13 @@ function guardWithinAuthorized(dir) {
   const target = path.resolve(String(dir || ''))
   const allowed = [...authorizedDirs].some((base) => target === base || target.startsWith(base + path.sep))
   if (!allowed) throw new Error(`目标目录未获授权：${target}`)
+  return target
+}
+
+function guardAuthorizedFile(filePath) {
+  const target = path.resolve(String(filePath || ''))
+  const allowed = [...authorizedDirs].some((base) => target.startsWith(base + path.sep))
+  if (!allowed) throw new Error('图片路径未获授权，请重新打开图片')
   return target
 }
 
@@ -61,7 +67,6 @@ export function registerIpc() {
   ipcMain.handle('settings:get', wrap(async () => await readSettings()))
   ipcMain.handle('settings:reset', wrap(async () => await writeSettings(defaults())))
   ipcMain.handle('settings:set', wrap(async (_e, patch) => await writeSettings(patch)))
-
   ipcMain.handle('douyin:parse', wrap(async (_e, { text }) => await parseDouyin(text, await settingsForParse())))
 
   /**
@@ -160,12 +165,6 @@ export function registerIpc() {
     return r
   }))
   ipcMain.handle('plugins:entryUrl', wrap(async (_e, { id, entry }) => plugins.pluginEntryUrl(id, entry)))
-
-  ipcMain.handle('wm:status', wrap(async () => await wmStatus()))
-  ipcMain.handle('wm:prepare', wrap(async (event, { id = 'migan' } = {}) => await wmPrepare(id, (p) => event.sender.send('wm:progress', p))))
-  ipcMain.handle('wm:detect', wrap(async (_e, payload) => await wmDetect(payload)))
-  ipcMain.handle('wm:inpaint', wrap(async (_e, payload) => await wmInpaint(payload)))
-  ipcMain.handle('wm:remove', wrap(async (_e, { id = 'migan' } = {}) => await wmRemove(id)))
 
   ipcMain.handle('update:check', wrap(async (e) => (await getUpdater(e.sender).check(), { started: true })))
   ipcMain.handle('update:download', wrap(async (e) => (await getUpdater(e.sender).download(), { started: true })))

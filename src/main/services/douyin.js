@@ -26,6 +26,22 @@ export function extractShareUrl(text) {
   return m[0].replace(/\/+$/, '')
 }
 
+/**
+ * 短链先用 HEAD 跟随一次重定向，只读取最终地址，不下载作品页正文。
+ * 识别到视频后可以直接走视频解析接口，避免先等 SEO 页面完整返回再失败。
+ */
+async function resolveShortLink(link) {
+  if (!/^https?:\/\/v\.douyin\.com\//i.test(link)) return { link, kind: '' }
+  try {
+    const res = await request(link, { method: 'HEAD', headers: { 'User-Agent': UA.desktop }, timeout: 5000 })
+    const kind = /\/video\//.test(res.url) ? 'video' : /\/note\//.test(res.url) ? 'image_album' : ''
+    return { link: res.url || link, kind }
+  } catch {
+    // 某些网络环境会拦 HEAD；识别失败就沿用原来的完整回退链路。
+    return { link, kind: '' }
+  }
+}
+
 function dedupeByOrigin(urls) {
   const seen = new Set()
   const out = []
@@ -135,8 +151,9 @@ async function demoParseOnce(link, host) {
   if (!taskId) throw new Error(`接口没有返回任务号：${submit.text().slice(0, 120)}`)
 
   let task = null
-  for (let i = 0; i < 20; i++) {
-    await sleep(1200)
+  const pollDelays = [350, 450, 650, 850, 1100, ...Array(15).fill(1200)]
+  for (const delay of pollDelays) {
+    await sleep(delay)
     const poll = await request(`${host}/api/v1/tasks/${taskId}`, { headers: { Cookie: cookie, Accept: 'application/json' } })
     if (authExpired(poll)) throw new DemoAuthExpired()
     const data = poll.json()?.data
@@ -231,9 +248,11 @@ export const STRATEGIES = ['auto', 'seo', 'demoApi', 'nologo']
  * @param cfg  { strategy, demoApiHost, nologoEndpoint, nologoToken }
  */
 export async function parse(text, cfg = {}) {
-  const link = extractShareUrl(text)
+  const source = extractShareUrl(text)
   const strategy = cfg.strategy || 'auto'
-  const chain = strategy === 'auto' ? ['seo', 'demoApi', 'nologo'] : [strategy]
+  const resolved = strategy === 'auto' ? await resolveShortLink(source) : { link: source, kind: '' }
+  const link = resolved.link
+  const chain = strategy === 'auto' ? (resolved.kind === 'video' ? ['demoApi', 'nologo'] : ['seo', 'demoApi', 'nologo']) : [strategy]
   const attempts = []
 
   for (const method of chain) {
@@ -248,7 +267,7 @@ export async function parse(text, cfg = {}) {
           : method === 'demoApi'
             ? await parseViaDemoApi(link, cfg.demoApiHost || DEMO_HOST_DEFAULT)
             : await parseViaNologo(link, cfg.nologoEndpoint, cfg.nologoToken)
-      return { ...result, source: link, via: method, attempts: attempts.concat({ method, ok: true, message: '' }) }
+      return { ...result, source, via: method, attempts: attempts.concat({ method, ok: true, message: '' }) }
     } catch (e) {
       attempts.push({ method, ok: false, message: err(e) })
       // 风控类失败换下一条链路是有意义的；参数类失败（口令里没链接）已经在上抛了

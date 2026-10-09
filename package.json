@@ -16,7 +16,8 @@
     "plugin:pack": "node tools/pack-plugin.mjs",
     "check:parse": "node tools/check-parse.mjs",
     "check:plugin": "electron-vite build && TOOLBOX_SELFCHECK=1 electron-vite preview",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "check:pdf": "node tools/check-pdf.mjs"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.137",

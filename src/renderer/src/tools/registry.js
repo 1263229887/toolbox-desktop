@@ -28,6 +28,28 @@ export const BUILTIN_TOOLS = [
     capabilities: ['dialog:pickFiles', 'files:read', 'files:save'],
     loader: () => import('@/tools/img-pdf/Index.vue'),
   },
+  {
+    id: 'pdf-compress',
+    name: 'PDF 压缩',
+    summary: '重压内嵌图像缩小体积，文字与页面结构原样保留',
+    icon: 'i-lucide-minimize',
+    category: '文档',
+    source: 'builtin',
+    status: 'ready',
+    capabilities: ['dialog:pickFiles', 'files:read', 'files:save'],
+    loader: () => import('@/tools/pdf-compress/Index.vue'),
+  },
+  {
+    id: 'pdf-edit',
+    name: 'PDF 工具箱',
+    summary: '合并、拆分、删页、旋转、调整页序',
+    icon: 'i-lucide-file-cog',
+    category: '文档',
+    source: 'builtin',
+    status: 'ready',
+    capabilities: ['dialog:pickFiles', 'dialog:pickFolder', 'files:read', 'files:save', 'files:writeBatch'],
+    loader: () => import('@/tools/pdf-edit/Index.vue'),
+  },
 ]
 
 const plugins = ref([])

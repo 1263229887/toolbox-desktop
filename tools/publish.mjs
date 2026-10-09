@@ -10,7 +10,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MODEL_PACKS } from '../src/main/services/model-registry.js'
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const token = process.env.GITHUB_TOKEN
@@ -58,16 +57,11 @@ async function replaceAsset(tag, name, file) {
   await upload(rel.id, file, name)
 }
 
-const what = process.argv[2] || 'all'
+const what = process.argv[2] || 'registry'
 
 if (what === 'registry' || what === 'all') {
   console.log('▶ 插件清单')
   await replaceAsset('registry', 'plugins.json', path.join(root, 'dist-plugins/plugins.json'))
 }
-if (what === 'model' || what === 'all') {
-  for (const p of Object.values(MODEL_PACKS)) {
-    p.file = `${p.id}-${p.version}.zip`
-    console.log(`▶ 模型包 ${p.id}`)
-    await replaceAsset(`model-${p.id}-${p.version}`, p.file, path.join(root, 'dist-models', p.file))
-  }
-}
+
+if (what !== 'registry' && what !== 'all') console.log('用法：node tools/publish.mjs [registry|all]')

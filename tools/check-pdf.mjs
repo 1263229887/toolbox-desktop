@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs'
 import { PDFDocument, PDFName } from 'pdf-lib'
-import { load, merge, split, organize, parseRange, replaceJpegImages, jpegSize, save, stampPages, tilePositions, placementXY, readMetadata, writeMetadata } from '../src/renderer/src/tools/pdf/ops.js'
+import { load, merge, split, organize, parseRange, replaceJpegImages, jpegSize, save, stampPages, tileStamp, tilePositions, placementXY, stampMatrix, readMetadata, writeMetadata } from '../src/renderer/src/tools/pdf/ops.js'
 
 let failed = 0
 const check = (label, cond, detail = '') => {
@@ -106,6 +106,31 @@ const tr = placementXY('top-right', 300, 200, 100, 20)
 check('左下坐标贴边', bl.x === 18 && bl.y === 18, JSON.stringify(bl))
 check('右上坐标不越界', tr.x === 300 - 100 - 18 && tr.y === 200 - 20 - 18, JSON.stringify(tr))
 check('平铺网格覆盖整页', tilePositions(300, 200, 60, 20, 40, 40, 0).length >= 15, `${tilePositions(300, 200, 60, 20, 40, 40, 0).length} 个位置`)
+
+// 8b) 平铺真的跑一遍 drawImage —— 只测 tilePositions 的格子数漏掉了旋转对象，线上直接抛 Invalid rotation
+const tileDoc = await docWithPages(2)
+let tileErr = ''
+let tiled = 0
+try {
+  tiled = await tileStamp(tileDoc, [0, 1], { bytes: wmPng, width: 60, height: 20, gapX: 40, gapY: 40, angle: -30, opacity: 0.3 })
+} catch (e) {
+  tileErr = e.message
+}
+check('平铺带倾斜角不报错', !tileErr, tileErr || `${tiled} 页`)
+await load(await save(tileDoc))
+check('倾斜平铺结果可回读', tileDoc.getPageCount() === 2)
+
+// 8c) 预览矩阵必须和 pdf-lib 的画法逐点一致：translate(x,y)→rotate→scale，图像左下角钉在 (x,y)
+//     画布是左上原点 y 向下，所以还要翻一次 v 轴；viewport 矩阵自带 y 翻转（这里 H=200、放大 2 倍）
+const V2 = [2, 0, 0, -2, 0, 400]
+const apply = (m, u, v) => [m[0] * u + m[2] * v + m[4], m[1] * u + m[3] * v + m[5]]
+const flat = stampMatrix(V2, { x: 18, y: 18, w: 100, h: 20 })
+// PDF 里这块图占 [18,118]×[18,38] → 画布上左上角 (36, (200-18-20)*2)、右下角 (236, (200-18)*2)
+check('预览矩阵：不旋转时左上角对齐', JSON.stringify(apply(flat, 0, 0).map(Math.round)) === '[36,324]', JSON.stringify(apply(flat, 0, 0)))
+check('预览矩阵：不旋转时右下角对齐', JSON.stringify(apply(flat, 1, 1).map(Math.round)) === '[236,364]', JSON.stringify(apply(flat, 1, 1)))
+const turn = stampMatrix([1, 0, 0, -1, 0, 200], { x: 10, y: 20, w: 100, h: 10, angle: 90 })
+// 逆时针 90°：图像的「上」转到「左」，所以左上角落在 PDF 点 (x-h, y) = (0,20) → 画布 (0,180)
+check('预览矩阵：旋转 90° 时锚点一致', JSON.stringify(apply(turn, 0, 0).map(Math.round)) === '[0,180]', JSON.stringify(apply(turn, 0, 0)))
 
 // 9) 元数据
 const metaDoc = await docWithPages(1)

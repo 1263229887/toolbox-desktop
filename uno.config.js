@@ -32,7 +32,7 @@ export default defineConfig({
     },
   },
   // 插件 manifest 里的图标类名宿主扫不到，需要显式保留
-  safelist: ['i-lucide-puzzle', 'i-lucide-minimize-2', 'i-lucide-file-image', 'i-lucide-image', 'i-lucide-file-text', 'i-lucide-compress'],
+  safelist: ['i-lucide-puzzle', 'i-lucide-minimize-2', 'i-lucide-file-image', 'i-lucide-image', 'i-lucide-file-text'],
   shortcuts: [
     ['card', `bg-surface-raised border border-surface-line rounded-[6px]`],
     ['panel', 'card shadow-sm'],

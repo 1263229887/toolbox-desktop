@@ -1,6 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { load, merge as mergeDocs, split as splitDoc, organize as organizeDoc, parseRange, save } from '../pdf/ops.js'
+import { openPreview } from '../pdf/preview.js'
+import PdfThumb from '../pdf/PdfThumb.vue'
 import ctx from '@/services/ctx'
 
 const api = ctx
@@ -19,6 +21,8 @@ const splitRange = ref('')
 // 页面整理：当前文件的页序与旋转状态
 const order = ref([])
 const rotations = ref({})
+// 缩略图只是辅助，打不开不影响整理本身
+const previewDoc = ref(null)
 
 const current = computed(() => files.value[0] || null)
 
@@ -41,6 +45,12 @@ async function pick(multiple) {
   if (mode.value === 'organize' && list[0]) {
     order.value = list[0].doc.getPages().map((_, i) => i)
     rotations.value = {}
+    previewDoc.value = null
+    try {
+      previewDoc.value = await openPreview(list[0].bytes)
+    } catch {
+      previewDoc.value = null
+    }
   }
 }
 
@@ -125,7 +135,7 @@ async function saveOne(data, name) {
         :key="m.id"
         class="h-7 rounded px-3 text-13px transition-colors duration-[var(--m-micro)]"
         :class="mode === m.id ? 'bg-accent text-white font-500' : 'text-ink-2 hover:bg-surface-sunken'"
-        @click="mode = m.id; files = []; order = []; rotations = {}; err = ''; note = ''"
+        @click="mode = m.id; files = []; order = []; rotations = {}; previewDoc = null; err = ''; note = ''"
       >{{ m.label }}</button>
     </div>
 
@@ -166,6 +176,7 @@ async function saveOne(data, name) {
             <span class="tabular text-13px font-500">第 {{ page + 1 }} 页</span>
             <span v-if="rotations[page]" class="caption tabular">{{ rotations[page] }}°</span>
           </div>
+          <PdfThumb v-if="previewDoc" :pdf="previewDoc" :index="page" :rotate="rotations[page] || 0" :width="116" />
           <div class="row">
             <button class="btn-ghost h-6 flex-1 px-1" :disabled="slot === 0" @click="movePage(slot, -1)"><span class="i-lucide-chevron-left size-3.5" /></button>
             <button class="btn-ghost h-6 flex-1 px-1" title="旋转 90°" @click="rotatePage(page)"><span class="i-lucide-rotate-cw size-3.5" /></button>

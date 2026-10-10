@@ -138,6 +138,35 @@ export function tilePositions(pageW, pageH, w, h, gapX, gapY, angle) {
   return out
 }
 
+/** 2x3 仿射矩阵复合：m1 作用在 m2 的结果之上（与 pdf 的 cm 连乘同序） */
+export function mul(m1, m2) {
+  return [
+    m1[0] * m2[0] + m1[2] * m2[1],
+    m1[1] * m2[0] + m1[3] * m2[1],
+    m1[0] * m2[2] + m1[2] * m2[3],
+    m1[1] * m2[2] + m1[3] * m2[3],
+    m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+    m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
+  ]
+}
+
+/**
+ * 预览用：把「盖章时的那套参数」换算成画布矩阵，保证屏幕所见即落盘所得。
+ * PDF 的画法是 translate(x,y) → rotate(θ) → scale(w,h)，图像左下角钉在 (x,y)、向 y 正向铺开；
+ * 画布原点在左上、y 向下，所以图像自身的 v 轴要翻一次（F）。
+ * viewport 传的是 pdfjs 的 PageViewport.transform，它已经带上了页面旋转和 y 翻转，直接左乘即可。
+ */
+export function stampMatrix(viewport, { x, y, w, h, angle = 0 }) {
+  const t = (angle * Math.PI) / 180
+  const cos = Math.cos(t)
+  const sin = Math.sin(t)
+  const S = [w, 0, 0, h, 0, 0]
+  const F = [1, 0, 0, -1, 0, h]
+  const R = [cos, sin, -sin, cos, 0, 0]
+  const T = [1, 0, 0, 1, x, y]
+  return mul(viewport, mul(T, mul(R, mul(F, S))))
+}
+
 /**
  * 给指定页盖一层带透明通道的 PNG —— 文字水印与页码都走这里。
  * 不嵌字体：pdf-lib 的 embedFont 不处理 .ttc 字体集合（Windows 的中文字体基本都是集合），
@@ -169,7 +198,9 @@ export async function tileStamp(doc, targets, overlay) {
     if (!page) continue
     const { width: w, height: h } = overlay
     for (const pos of tilePositions(page.getWidth(), page.getHeight(), w, h, overlay.gapX, overlay.gapY, overlay.angle)) {
-      page.drawImage(img, { x: pos.x, y: pos.y, width: w, height: h, opacity: overlay.opacity ?? 1, rotate: overlay.angle ? { type: 'deg', value: overlay.angle } : undefined })
+      // 旋转对象只能由 degrees() 造：pdf-lib 校验的是 {type:'degrees',angle}，
+      // 自己拼 {type:'deg',value} 会在 toRadians 里抛 Invalid rotation（core 内部那套 AngleTypes 不是同一个形状）
+      page.drawImage(img, { x: pos.x, y: pos.y, width: w, height: h, opacity: overlay.opacity ?? 1, rotate: overlay.angle ? degrees(overlay.angle) : undefined })
     }
     stamped++
   }

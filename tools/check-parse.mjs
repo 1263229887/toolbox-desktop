@@ -3,7 +3,7 @@
  * 解析链路的可执行自检：不开界面、不开浏览器，直接跑主进程用的同一个模块。
  * 用法：pnpm check:parse ["口令或链接"]
  */
-import { extractShareUrl, isVideoUrl, parse } from '../src/main/services/douyin.js'
+import { authorPosts, extractShareUrl, isVideoUrl, parse, secUidFrom } from '../src/main/services/douyin.js'
 
 const DEFAULT_NOTE = 'https://v.douyin.com/RcjSxXKyEr8/'
 const DEFAULT_VIDEO = 'https://v.douyin.com/i2e9yYEe/'
@@ -42,6 +42,31 @@ if (clip) {
   // 裸 GET 能不能通取决于 CDN 当天的 Referer 策略，不是我们要依赖的契约。
   const head = await fetch(clip.url, { headers: { 'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)', Referer: 'https://www.douyin.com/', Range: 'bytes=0-1' } })
   check('按生产用的 UA+Referer 可取流', head.status === 206 || head.status === 200, `HTTP ${head.status} ${head.headers.get('content-type')}`)
+}
+
+// 5) 作者维度：一次调用就得带回可下载直链 + 作者标识，否则「先列表、再勾选、只下选中的」不成立
+check('从主页链接取 sec_uid', secUidFrom('https://www.douyin.com/user/MS4wLjABAAAAtest123?x=1') === 'MS4wLjABAAAAtest123')
+check('裸 sec_uid 原样通过', secUidFrom('MS4wLjABAAAAtest123') === 'MS4wLjABAAAAtest123')
+check('作品链接不被误判成主页', secUidFrom('https://www.douyin.com/video/123') === '')
+const secUid = video.author?.secUid || ''
+check('单条解析已带作者 sec_uid（省掉一次二次请求）', /^MS4wLjAB/.test(secUid), `${secUid.slice(0, 20)}…`)
+if (secUid) {
+  const page = await authorPosts(secUid)
+  check('作品列表非空', page.items.length > 0, `${page.items.length} 条 hasMore=${page.hasMore}`)
+  const ready = page.items.filter((p) => !p.needsParse)
+  check('列表条目自带无水印直链', ready.length >= Math.ceil(page.items.length * 0.6), `${ready.length}/${page.items.length} 条无需再解析`)
+  check('每条都有 id / 标题 / 落地页', page.items.every((p) => p.id && p.webUrl && p.title !== undefined))
+  if (ready[0]) check('视频直链指向抖音自家 CDN', /zjcdn|douyinvod|bytecdn/.test(ready[0].items[0].url), ready[0].items[0].url.split('/')[2])
+  if (page.cursor) {
+    // 实测连发两次 user/posts 就会命中上游风控（身份冷却 60s），所以这里两种结果都算通过：
+    // 拿到不重复的下一页，或者给出「照它说的秒数退避」的结构化错误。
+    try {
+      const next = await authorPosts(secUid, { cursor: page.cursor })
+      check('游标翻页拿到不重复的下一页', next.items.length > 0 && !next.items.some((p) => page.items.some((q) => q.id === p.id)), `${next.items.length} 条`)
+    } catch (e) {
+      check('被风控时带 retryAfter（客户端照秒数退避，不自己猜）', e.code === 'UPSTREAM_RISK_CONTROL' && e.retryAfter > 0, `${e.code || e.name} · ${e.message.slice(0, 46)}`)
+    }
+  }
 }
 
 console.log(`\n链路尝试记录：`)

@@ -134,23 +134,43 @@ function pickCleanStream(media) {
 /** demo 实例的会话失效（cookie 提前被服务端作废、或实例重启）时用它触发无感重登 */
 class DemoAuthExpired extends Error {}
 
+/**
+ * 上游风控。实测连拉两次 user/posts 就会命中：
+ * `{code:'UPSTREAM_RISK_CONTROL', retryable:true, retry_after:60}` —— 身份进冷却 60 秒。
+ * 对面是「每身份 + 每端点」的令牌桶，不是按累计条数封人，所以正确姿势是照它给的秒数退避，
+ * 而不是预先按序号加大延时。
+ */
+export class UpstreamRisk extends Error {
+  constructor(message, { retryAfter = 0, code = '' } = {}) {
+    super(retryAfter ? `${message}（请 ${retryAfter} 秒后重试）` : message)
+    this.name = 'UpstreamRisk'
+    this.code = code
+    this.retryAfter = retryAfter
+    this.retryable = true
+  }
+}
+
 function authExpired(res) {
   return res.status === 401 || res.json?.()?.error?.code === 'UNAUTHENTICATED'
 }
 
-async function demoParseOnce(link, host) {
+/**
+ * demo 实例的通用任务调用：`/api/v1/parse`、`/user/posts` 都是「提交 → 202 + task_id → 轮询」这一套契约，
+ * 只有少数情况会同步返回，所以两条路都在这儿收掉。
+ */
+async function demoTask(path, host, { method = 'GET', body, label = '解析' } = {}) {
   const cookie = await demoCookie(host)
-  const submit = await request(`${host}/api/v1/parse`, {
-    method: 'POST',
+  const submit = await request(`${host}${path}`, {
+    method,
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', Cookie: cookie },
-    body: { url: link },
+    ...(body ? { body } : {}),
   })
   if (authExpired(submit)) throw new DemoAuthExpired()
-  if (!submit.ok) throw new Error(`提交解析失败 HTTP ${submit.status}`)
-  const taskId = submit.json()?.data?.task_id
-  if (!taskId) throw new Error(`接口没有返回任务号：${submit.text().slice(0, 120)}`)
+  if (!submit.ok) throw new Error(`提交失败 HTTP ${submit.status}`)
+  const json = submit.json()
+  const taskId = json?.data?.task_id
+  if (!taskId) return json?.data?.data ?? json?.data ?? {}
 
-  let task = null
   const pollDelays = [350, 450, 650, 850, 1100, ...Array(15).fill(1200)]
   for (const delay of pollDelays) {
     await sleep(delay)
@@ -158,12 +178,31 @@ async function demoParseOnce(link, host) {
     if (authExpired(poll)) throw new DemoAuthExpired()
     const data = poll.json()?.data
     if (!data) continue
-    if (data.state === 'done') { task = data; break }
-    if (data.state === 'failed' || data.state === 'error') throw new Error(`解析失败：${JSON.stringify(data.error || data).slice(0, 160)}`)
+    if (data.state === 'done') return data.data ?? {}
+    if (data.state === 'failed' || data.state === 'error') {
+      const e = data.error || {}
+      if (e.code === 'UPSTREAM_RISK_CONTROL') throw new UpstreamRisk(e.message || '上游判定为自动化流量', { retryAfter: Number(e.retry_after) || 0, code: e.code })
+      throw new Error(`${label}失败：${JSON.stringify(e || data).slice(0, 160)}`)
+    }
   }
-  if (!task) throw new Error('解析超时（30s），稍后重试')
+  throw new Error('解析超时（30s），稍后重试')
+}
 
-  const d = task.data || {}
+/** 会话过期就清掉缓存重新登录再跑一次，用户不需要知道中间掉过线 */
+async function withDemoRetry(fn, host) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (!(e instanceof DemoAuthExpired) || attempt === 1) throw e
+      demoSession.cookie = ''
+      demoSession.expiresAt = 0
+    }
+  }
+}
+
+async function demoParseOnce(link, host) {
+  const d = await withDemoRetry(() => demoTask('/api/v1/parse', host, { method: 'POST', body: { url: link } }), host)
   const media = d.media || {}
   const items = []
   for (const img of media.images || []) {
@@ -191,7 +230,16 @@ async function demoParseOnce(link, host) {
     kind: d.kind === 'video' ? 'video' : 'image_album',
     webUrl: d.web_url || '',
     title: d.title || d.description || '',
-    author: d.author?.nickname || d.author?.uid || null,
+    // sec_uid 一定要留：接口本来就把整个 author 对象回过来了，之前只取昵称，
+    // 想「看看 TA 的其他作品」就得再发一次请求才能拿到主页标识。现在同一次响应里就有。
+    author: d.author?.nickname || d.author?.sec_uid
+      ? {
+          nickname: d.author?.nickname || '',
+          secUid: d.author?.sec_uid || '',
+          webUrl: d.author?.web_url || '',
+          uniqueId: d.author?.unique_id || '',
+        }
+      : null,
     durationMs: d.duration_ms || 0,
     stats: d.stats || null,
     cover,
@@ -199,16 +247,56 @@ async function demoParseOnce(link, host) {
   }
 }
 
-/** 会话过期就清掉缓存重新登录再跑一次，用户不需要知道中间掉过线 */
-async function parseViaDemoApi(link, host) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await demoParseOnce(link, host)
-    } catch (e) {
-      if (!(e instanceof DemoAuthExpired) || attempt === 1) throw e
-      demoSession.cookie = ''
-      demoSession.expiresAt = 0
+/**
+ * 作者维度的作品列表。一次调用就把每条的无水印直链一起带回来（实测 20 条一页、13 路流全是 watermark:false），
+ * 所以批量下载不需要对每条再 parse 一次 —— 这是「先列表、再勾选、只下选中的」能成立的前提。
+ */
+export async function authorPosts(input, cfg = {}) {
+  const host = cfg.demoApiHost || DEMO_HOST_DEFAULT
+  const sec = secUidFrom(input)
+  const q = new URLSearchParams()
+  if (sec) q.set('sec_user_id', sec)
+  else q.set('url', String(input || '').trim())
+  q.set('count', String(cfg.count || 20))
+  if (cfg.cursor) q.set('cursor', String(cfg.cursor))
+  const data = await withDemoRetry(() => demoTask(`/api/v1/douyin/user/posts?${q}`, host, { label: '拉取作品列表' }), host)
+  const items = (Array.isArray(data?.items) ? data.items : []).map(normalizePost).filter(Boolean)
+  return { items, cursor: data?.cursor || '', hasMore: data?.has_more !== false, nickname: data?.items?.[0]?.author?.nickname || '' }
+}
+
+/** 主页链接 / 裸 sec_uid 都收；其余（含作品链接）交给接口自己去认 */
+export function secUidFrom(input) {
+  const s = String(input || '').trim()
+  if (/^MS4wLjAB/.test(s)) return s.split(/[?&#/]/)[0]
+  return s.match(/\/user\/(MS4wLjAB[^/?&#]+)/)?.[1] || ''
+}
+
+function normalizePost(p) {
+  if (!p || !p.content_id) return null
+  const kind = p.kind === 'video' ? 'video' : 'image_album'
+  const items = []
+  if (kind === 'video') {
+    const stream = pickCleanStream(p.media || {})
+    if (stream) items.push({ type: 'video', url: stream.url, ext: '.mp4', width: stream.width || 0, height: stream.height || 0, sizeBytes: stream.size_bytes || 0 })
+  } else {
+    for (const img of p.media?.images || []) {
+      const u = typeof img === 'string' ? img : img?.url
+      if (u) items.push({ type: 'image', url: u, ext: pickExt(u) })
     }
+  }
+  return {
+    id: String(p.content_id),
+    kind,
+    title: String(p.title || p.description || '').slice(0, 90),
+    webUrl: p.web_url || '',
+    createdAt: p.created_at || 0,
+    durationMs: p.duration_ms || 0,
+    sizeBytes: items.reduce((n, i) => n + (i.sizeBytes || 0), 0),
+    cover: p.media?.covers?.[0]?.url || p.media?.images?.[0]?.url || p.media?.video?.cover?.url || '',
+    stats: p.stats || null,
+    items,
+    // 列表里少数条目（尤其图文）可能不带可用直链；这种退回单条解析，别在列表阶段就报错
+    needsParse: !items.length,
   }
 }
 
@@ -265,7 +353,7 @@ export async function parse(text, cfg = {}) {
         method === 'seo'
           ? await parseViaSeo(link)
           : method === 'demoApi'
-            ? await parseViaDemoApi(link, cfg.demoApiHost || DEMO_HOST_DEFAULT)
+            ? await demoParseOnce(link, cfg.demoApiHost || DEMO_HOST_DEFAULT)
             : await parseViaNologo(link, cfg.nologoEndpoint, cfg.nologoToken)
       return { ...result, source, via: method, attempts: attempts.concat({ method, ok: true, message: '' }) }
     } catch (e) {

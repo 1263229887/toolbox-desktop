@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, toRaw } from 'vue'
+import AuthorWorks from './AuthorWorks.vue'
 import ctx from '@/services/ctx'
 
 const props = defineProps({ ctx: { type: Object, default: null } })
@@ -18,6 +19,11 @@ const preview = ref(-1)
 const parsingStep = ref(0)
 const parsingSeconds = ref(0)
 
+// 作者维度是次要路径：默认不占界面，点了才拉数据
+const authorPanel = ref(null)
+const profileMode = ref(false)
+const profileUrl = ref('')
+
 const PARSING_STEPS = ['读取作品信息', '定位清晰媒体', '整理下载结果']
 let offProgress = null
 let parseClock = null
@@ -28,6 +34,17 @@ const videos = computed(() => (result.value?.items || []).filter((i) => i.type =
 const previewItem = computed(() => (preview.value >= 0 ? images.value[preview.value] : null))
 const canParse = computed(() => input.value.trim().length > 8 && stage.value !== 'parsing')
 const parsingLabel = computed(() => PARSING_STEPS[parsingStep.value])
+const authorName = computed(() => (typeof result.value?.author === 'string' ? result.value.author : result.value?.author?.nickname) || '')
+
+function openProfile() {
+  const v = profileUrl.value.trim()
+  if (!/MS4wLjAB|douyin\.com\/user\//.test(v)) {
+    error.value = '这里要粘作者主页链接（douyin.com/user/MS4w…）。纯「抖音号」文本换不出作品列表：抖音的用户页要先过它家的 JS 虚拟机风控，解析接口那边也没有 search 端点。'
+    return
+  }
+  error.value = ''
+  authorPanel.value = { secUid: '', url: v, nickname: '' }
+}
 
 function startParsingMotion() {
   parsingStep.value = 0
@@ -89,6 +106,7 @@ async function parse() {
   error.value = ''
   result.value = null
   saveResult.value = null
+  authorPanel.value = null
   selected.value = new Set()
   startParsingMotion()
   try {
@@ -168,6 +186,20 @@ onBeforeUnmount(() => {
           <span>{{ stage === 'parsing' ? '正在解析' : '开始解析' }}</span>
         </button>
       </div>
+
+      <div class="mt-1 flex flex-col gap-2">
+        <button class="btn-ghost h-6 self-start px-0 text-12px" @click="profileMode = !profileMode">
+          <span :class="profileMode ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />按作者主页链接批量拉作品
+        </button>
+        <template v-if="profileMode">
+          <div class="row gap-2">
+            <input v-model="profileUrl" class="field flex-1" placeholder="粘贴作者主页链接 douyin.com/user/MS4w…" data-selectable @keyup.enter="openProfile" />
+            <button class="btn-plain" :disabled="profileUrl.trim().length < 12" @click="openProfile">拉取作品</button>
+          </div>
+          <p class="caption">只认主页链接。纯「抖音号」文本换不出作品列表（实测：用户页要先过字节的 JS 虚拟机风控，解析实例那边也没有 search 端点）。</p>
+        </template>
+      </div>
+
       <Transition name="tip">
         <div v-if="stage === 'error'" class="parse-error"><span class="i-lucide-circle-alert size-4 flex-none" />{{ error }}</div>
         <div v-else-if="error" class="parse-warning">{{ error }}</div>
@@ -190,9 +222,12 @@ onBeforeUnmount(() => {
             <span class="muted tabular">{{ images.length ? images.length + ' 张图片' : '' }}{{ videos.length ? (images.length ? ' · ' : '') + '1 个视频' : '' }}</span>
           </div>
           <h2 class="truncate text-14px font-650">{{ result.title || '解析完成' }}</h2>
-          <p v-if="result.author" class="muted mt-0.5">@{{ result.author }}</p>
+          <p v-if="authorName" class="muted mt-0.5">@{{ authorName }}</p>
         </div>
         <div class="result-actions">
+          <button v-if="result.author?.secUid" class="btn-ghost" :disabled="!!authorPanel" @click="authorPanel = { ...toRaw(result.author) }">
+            <span class="i-lucide-clapperboard size-3.5" />查看 TA 的其他作品
+          </button>
           <button class="btn-ghost" @click="copyLinks"><span class="i-lucide-copy size-3.5" />复制直链</button>
           <button class="btn-primary" :disabled="saving || !selected.size" @click="save">
             <span v-if="saving" class="i-lucide-loader-2 size-4 animate-spin" />
@@ -245,12 +280,18 @@ onBeforeUnmount(() => {
           <button class="btn-ghost ml-auto h-6 text-12px" @click="reveal(saveResult.dir)">打开目录</button>
         </div>
       </Transition>
+
+      <AuthorWorks v-if="authorPanel" :api="api" :source="authorPanel" @close="authorPanel = null" />
     </div>
 
-    <div v-else class="parse-empty">
+    <div v-else-if="!authorPanel" class="parse-empty">
       <span class="empty-mark"><span class="i-lucide-wand-sparkles size-5" /></span>
       <p>粘贴分享口令，一键取回清晰内容</p>
       <span>结果会在这里出现</span>
+    </div>
+
+    <div v-else class="min-h-0 flex-1 overflow-y-auto py-1">
+      <AuthorWorks :api="api" :source="authorPanel" @close="authorPanel = null" />
     </div>
 
     <Teleport to="body">

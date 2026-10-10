@@ -7,6 +7,9 @@ const INVOKE = new Set([
   'settings:set',
   'settings:reset',
   'douyin:parse',
+  'douyin:author-posts',
+  'douyin:batch-save',
+  'douyin:batch-stop',
   'media:save',
   'dialog:pickFiles',
   'dialog:pickFolder',
@@ -27,7 +30,7 @@ const INVOKE = new Set([
   'update:releasePage',
 ])
 
-const EVENTS = new Set(['media:progress', 'plugins:progress', 'update:status'])
+const EVENTS = new Set(['media:progress', 'douyin:batch-progress', 'plugins:progress', 'update:status'])
 
 contextBridge.exposeInMainWorld('toolbox', {
   invoke(channel, payload) {

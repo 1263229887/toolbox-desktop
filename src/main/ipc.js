@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { app, clipboard, dialog, ipcMain, shell } from 'electron'
-import { parse as parseDouyin } from './services/douyin.js'
+import { authorPosts, parse as parseDouyin } from './services/douyin.js'
 import { downloadFile, safeName, stamp, UA } from './services/netio.js'
 import * as plugins from './services/plugins.js'
 import { initUpdater } from './services/updater.js'
@@ -98,6 +98,111 @@ export function registerIpc() {
       event.sender.send('media:progress', { phase: 'overall', done, total })
     }
     return { dir, saved, failed }
+  }))
+
+  ipcMain.handle('douyin:author-posts', wrap(async (_e, { input, cursor, count } = {}) =>
+    await authorPosts(input, { ...(await settingsForParse()), cursor, count })))
+
+  /**
+   * 作者作品批量下载。三个实测事实决定了它的形态：
+   *  - **直链只有 3 小时有效期**（签发→过期正好 3h，路径里那段 8 位 hex 就是过期时间戳），
+   *    所以「先把 N 条解析完再慢慢下」不成立；必须一条落完再进下一条，失败也只重新解析这一条。
+   *  - **串行不并发**：批量真正打的是抖音自己的 CDN，个人用量下多路并发省不了多少时间，
+   *    却要把进度归属和 CDN 侧异常判定都再处理一遍；对面 demo 实例本来就有每身份 in-flight 锁。
+   *  - **间隔只在出错后拉长**：demo 实例是令牌桶 + 端点熔断，不按累计条数封人，
+   *    预先按序号递增只会白白拖慢自己（第 40 条硬等 40 秒那种）。
+   */
+  let batchRun = null
+
+  /** 抖音标题基本是「文案 + 一串 #话题」，直接拿来当文件名会长到没法看，截到第一个话题前 */
+  function postStem(post, index) {
+    const caption = String(post.title || '').split('#')[0].replace(/\s+/g, ' ').trim().slice(0, 40)
+    return `${String(index + 1).padStart(2, '0')}-${safeName(caption || post.id, post.id)}`
+  }
+
+  ipcMain.handle('douyin:batch-save', wrap(async (event, { posts, author }) => {
+    const [cfg, settings] = await Promise.all([settingsForParse(), readSettings()])
+    const dir = path.join(settings.downloadDir, 'douyin', `${safeName(author, '作者作品')}-${stamp()}`)
+    await fsp.mkdir(dir, { recursive: true })
+
+    const controller = new AbortController()
+    batchRun = { stop: false, controller }
+    let stopped = false
+    const total = posts.length
+    const saved = []
+    const failed = []
+    let done = 0
+    let gap = 1200
+    let streak = 0
+    const send = (p) => event.sender.send('douyin:batch-progress', { ...p, done, total })
+
+    try {
+      for (const [i, post] of posts.entries()) {
+        if (batchRun.stop) break
+        // 一条图文可能有十几张图，中途失败就从头重下太浪费：按下标记住已落地的，重试只补剩下的
+        const landed = new Set()
+        let items = post.needsParse ? [] : [...post.items]
+        let lastError = ''
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (batchRun.stop) break
+          try {
+            if (!items.length) items = (await parseDouyin(post.webUrl || post.id, cfg)).items
+            for (const [k, it] of items.entries()) {
+              if (batchRun.stop) break
+              if (landed.has(k)) continue
+              const stem = `${postStem(post, i)}${items.length > 1 ? `-${k + 1}` : ''}`
+              const name = `${stem}${it.ext || (it.type === 'video' ? '.mp4' : '.jpg')}`
+              send({ phase: 'post', index: i, id: post.id, title: post.title, state: 'downloading', file: name, fileIndex: k + 1, fileTotal: items.length })
+              const r = await downloadFile(it.url, path.join(dir, name), {
+                headers: { 'User-Agent': UA.bot, Referer: 'https://www.douyin.com/' },
+                totalHint: it.sizeBytes || 0,
+                retries: 3,
+                signal: controller.signal,
+                onProgress: (p) => send({ phase: 'file', index: i, id: post.id, file: name, ...p }),
+              })
+              landed.add(k)
+              saved.push({ name, size: r.size })
+            }
+            lastError = ''
+            break
+          } catch (e) {
+            lastError = (e && e.message) || String(e)
+            // 直链可能已经过期，下一轮只重解析这一条，不回头刷整个列表
+            items = []
+            if (batchRun.stop || controller.signal.aborted) break
+            // 上游给了明确的冷却时长，就照它说的等，别自己猜倍数
+            const cool = e?.code === 'UPSTREAM_RISK_CONTROL' ? Math.min(180, Math.max(5, e.retryAfter || 60)) : 0
+            if (attempt < 2) {
+              send({ phase: 'post', index: i, id: post.id, title: post.title, state: cool ? 'cooling' : 'retrying', error: lastError, waitSec: cool })
+              for (let s = 0; s < cool && !batchRun.stop; s++) await new Promise((r) => setTimeout(r, 1000))
+            }
+          }
+        }
+        done++
+        if (lastError) {
+          failed.push({ index: i, id: post.id, title: post.title, error: lastError })
+          streak++
+          gap = Math.min(15000, Math.round(gap * (streak >= 2 ? 2 : 1.6)))
+        } else {
+          streak = 0
+          gap = Math.max(1200, Math.round(gap * 0.7))
+        }
+        send({ phase: 'overall', index: i, state: lastError ? 'failed' : 'done', error: lastError, gap })
+        if (i < total - 1 && !batchRun.stop) await new Promise((r) => setTimeout(r, gap))
+      }
+    } finally {
+      stopped = batchRun.stop
+      batchRun = null
+      send({ phase: 'end', stopped })
+    }
+    return { dir, saved, failed, stopped }
+  }))
+
+  ipcMain.handle('douyin:batch-stop', wrap(async () => {
+    if (!batchRun) return { stopping: false }
+    batchRun.stop = true
+    batchRun.controller.abort()
+    return { stopping: true }
   }))
 
   ipcMain.handle('dialog:pickFiles', wrap(async (_e, { multiple = true, filters = IMAGE_FILTERS } = {}) => {

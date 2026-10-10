@@ -73,6 +73,8 @@ export async function downloadFile(url, dest, { headers = {}, timeout = 7200000,
     try {
       res = await fetch(url, { headers: send, signal: signal || AbortSignal.timeout(timeout), redirect: 'follow' })
     } catch (e) {
+      // 取消信号不当成网络抖动：否则「停止」还要被重试三次才停下来
+      if (signal?.aborted) throw new Error('已取消下载')
       if (attempt < retries) {
         // 连接层失败（fetch failed / ECONNRESET）不退避会瞬间打满重试
         await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)))

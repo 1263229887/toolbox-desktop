@@ -1,0 +1,9 @@
+{
+  "name": "工具箱",
+  "appid": "",
+  "description": "桌面工具箱的移动端:粘贴抖音分享口令,取回无水印图片与视频",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "uni-app-x": {},
+  "locale": "zh-Hans"
+}

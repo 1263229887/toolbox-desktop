@@ -1,0 +1,507 @@
+<template>
+  <view class="page">
+    <!-- 命令输入 -->
+    <view class="card">
+      <text class="label">抖音分享口令</text>
+      <view class="input-row">
+        <input
+          v-model="input"
+          class="field"
+          type="text"
+          placeholder="粘贴整段分享口令或短链接"
+          :placeholder-style="'color:#a6abb8'"
+        />
+      </view>
+      <text class="hint">按解析自动提取链接,支持直接粘贴带文案的整段内容</text>
+      <view class="action-row">
+        <view
+          class="btn-primary action-btn"
+          :class="stage === 'parsing' ? 'btn-disabled' : ''"
+          @click="startParse"
+        >
+          <text class="btn-primary-text">{{ stage === 'parsing' ? '正在解析' : '开始解析' }}</text>
+        </view>
+      </view>
+      <view v-if="stage === 'error' || error.length > 0" class="error-box">
+        <text class="error-text">{{ error }}</text>
+      </view>
+    </view>
+
+    <!-- 解析中 -->
+    <view v-if="stage === 'parsing'" class="card parsing">
+      <text class="parsing-title">正在取回清晰内容…</text>
+      <text class="muted">已等待 {{ seconds }} 秒,直链拿到后立即展示</text>
+    </view>
+
+    <!-- 解析结果 -->
+    <template v-if="result !== null">
+      <view class="card">
+        <view class="row">
+          <text class="kind-badge">{{ result.kind === 'video' ? '视频' : '图文' }}</text>
+          <text class="muted">{{ result.items.length }} 个媒体</text>
+        </view>
+        <text class="title">{{ result.title.length > 0 ? result.title : '解析完成' }}</text>
+      </view>
+
+      <!-- 视频预览 + 保存 -->
+      <view v-if="videoItem !== null" class="card">
+        <video
+          class="video"
+          :src="videoItem.url"
+          :poster="result.cover.length > 0 ? result.cover : undefined"
+          controls
+          object-fit="contain"
+        />
+        <view
+          class="btn-primary save-btn"
+          :class="saving ? 'btn-disabled' : ''"
+          @click="saveMedia"
+        >
+          <text class="btn-primary-text">{{ saving ? '保存中 ' + savedCount + '/' + saveTotal : '保存视频到相册' }}</text>
+        </view>
+        <text v-if="saveMsg.length > 0" class="save-msg">{{ saveMsg }}</text>
+      </view>
+
+      <!-- 图片网格 + 保存 -->
+      <view v-if="images.length > 0" class="card">
+        <view class="grid">
+          <image
+            v-for="(it, i) in images"
+            :key="it.url"
+            class="cell"
+            :src="it.url"
+            mode="aspectFill"
+            @click="previewImage(i)"
+          />
+        </view>
+        <view
+          class="btn-primary save-btn"
+          :class="saving ? 'btn-disabled' : ''"
+          @click="saveMedia"
+        >
+          <text class="btn-primary-text">{{ saving ? '保存中 ' + savedCount + '/' + saveTotal : '保存全部图片(' + images.length + '张)' }}</text>
+        </view>
+        <text v-if="saveMsg.length > 0" class="save-msg">{{ saveMsg }}</text>
+      </view>
+
+      <text class="foot-note">无水印直链约 3 小时过期,要保存请趁早;本工具不做任何历史记录。</text>
+    </template>
+
+    <text v-if="stage === 'idle' && result === null" class="empty-tip">粘贴分享口令,取回无水印内容</text>
+  </view>
+</template>
+
+<script setup lang="ts">
+  import { ref } from 'vue'
+  import { onLoad } from '@dcloudio/uni-app'
+
+  type MediaItem = {
+    kind: string // 'image' | 'video'
+    url: string
+  }
+  type ParseResult = {
+    kind: string // 'video' | 'album'
+    title: string
+    cover: string
+    items: MediaItem[]
+  }
+
+  const DEMO_HOST = 'https://demo.douyin.wtf'
+
+  const input = ref('')
+  const stage = ref('idle') // idle | parsing | done | error
+  const error = ref('')
+  const seconds = ref(0)
+  const result = ref<ParseResult | null>(null)
+  const saving = ref(false)
+  const savedCount = ref(0)
+  const saveTotal = ref(0)
+  const saveMsg = ref('')
+  let clock = 0
+
+  const images = ref<MediaItem[]>([])
+  const videoItem = ref<MediaItem | null>(null)
+
+  // —— HTTP:统一 promise 化,并顺手把 Set-Cookie 拼出来(demo 实例靠会话 cookie) ——
+  function http(url: string, method: string, data: string | null, header: Map<string, string>): Promise<any> {
+    return new Promise((resolve, reject) => {
+      uni.request({
+        url,
+        method: method as RequestMethod,
+        data: data as any,
+        header: header as any,
+        timeout: 30000,
+        success: (res) => {
+          let cookie = ''
+          const h = res.header as any
+          if (h != null) {
+            for (const key in h) {
+              if (key.toLowerCase() == 'set-cookie') {
+                const v = h[key]
+                cookie = Array.isArray(v) ? v.join('; ') : String(v)
+              }
+            }
+          }
+          resolve({ statusCode: res.statusCode, body: res.data, cookie: cookie })
+        },
+        fail: (err) => {
+          reject(new Error(err.errMsg || '网络请求失败'))
+        },
+      })
+    })
+  }
+
+  function toJson(b: any): any {
+    if (typeof b == 'string') {
+      try {
+        return JSON.parse(b)
+      } catch (e) {
+        return null
+      }
+    }
+    return b
+  }
+
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  function extractLink(text: string): string {
+    const m = text.match(/https?:\/\/[^\s，,。、）)】]+/)
+    if (m == null) throw new Error('粘贴的内容里没有链接')
+    return m[0].replace(/\/+$/, '')
+  }
+
+  class AuthExpired extends Error {}
+
+  // demo 实例会话 7 天有效;每次进程内缓存,401 时清掉重登一次
+  const session = { cookie: '', expiresAt: 0 }
+
+  async function demoCookie(): Promise<string> {
+    if (session.cookie.length > 0 && Date.now() < session.expiresAt) return session.cookie
+    const credsRes = await http(`${DEMO_HOST}/api/v1/auth/demo`, 'GET', null, { Accept: 'application/json' })
+    const creds = toJson(credsRes.body)
+    const username = creds?.data?.username
+    const password = creds?.data?.password
+    if (username == null || password == null) throw new Error('demo 实例未开放公共账号')
+    const loginRes = await http(`${DEMO_HOST}/api/v1/auth/login`, 'POST', JSON.stringify({ username: username, password: password }), {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    })
+    if (loginRes.cookie.length == 0) throw new Error('demo 登录失败 HTTP ' + loginRes.statusCode)
+    session.cookie = loginRes.cookie
+    const lj = toJson(loginRes.body)
+    const ttl = lj?.data?.expires_in ?? 604800
+    session.expiresAt = Date.now() + (ttl - 600) * 1000
+    return session.cookie
+  }
+
+  async function withSession(fn: (cookie: string) => Promise<any>): Promise<any> {
+    try {
+      return await fn(await demoCookie())
+    } catch (e) {
+      if (e instanceof AuthExpired) {
+        session.cookie = ''
+        session.expiresAt = 0
+        return await fn(await demoCookie())
+      }
+      throw e
+    }
+  }
+
+  async function fetchTask(link: string): Promise<any> {
+    return await withSession(async (cookie) => {
+      const submit = await http(`${DEMO_HOST}/api/v1/parse`, 'POST', JSON.stringify({ url: link }), {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Cookie: cookie,
+      })
+      if (submit.statusCode == 401) throw new AuthExpired('会话过期')
+      const j = toJson(submit.body)
+      const taskId = j?.data?.task_id
+      if (taskId == null) return j?.data ?? j ?? {}
+
+      for (let i = 0; i < 20; i++) {
+        await sleep(i < 5 ? 350 + i * 150 : 1200)
+        const poll = await http(`${DEMO_HOST}/api/v1/tasks/${taskId}`, 'GET', null, {
+          Accept: 'application/json',
+          Cookie: session.cookie,
+        })
+        if (poll.statusCode == 401) throw new AuthExpired('会话过期')
+        const pj = toJson(poll.body)?.data
+        if (pj == null) continue
+        if (pj.state == 'done') return pj.data ?? {}
+        if (pj.state == 'failed' || pj.state == 'error') {
+          const e = pj.error ?? {}
+          if (e.code == 'UPSTREAM_RISK_CONTROL') throw new Error(e.message ?? '上游判定为自动化流量,请稍后再试')
+          throw new Error('解析失败:' + JSON.stringify(e ?? pj).slice(0, 150))
+        }
+      }
+      throw new Error('解析超时(约 30 秒),稍后重试')
+    })
+  }
+
+  function mapResult(d: any): ParseResult {
+    const media = d?.media ?? {}
+    const items: MediaItem[] = []
+    const imgs = media.images ?? []
+    for (let i = 0; i < imgs.length; i++) {
+      const img = imgs[i]
+      const u = typeof img == 'string' ? img : (img?.url ?? '')
+      if (u.length > 0) items.push({ kind: 'image', url: u })
+    }
+    // 多路流里挑无水印、像素最高的一路(与桌面端 douyin.js 同逻辑)
+    const candidates: any[] = []
+    if (media.video?.url != null) candidates.push(media.video)
+    const streams = media.streams ?? []
+    for (let i = 0; i < streams.length; i++) {
+      if (streams[i]?.url != null) candidates.push(streams[i])
+    }
+    const clean = candidates.filter((v) => v.watermark !== true)
+    const pool = clean.length > 0 ? clean : candidates
+    pool.sort((a, b) => (b.width ?? 0) * (b.height ?? 0) - (a.width ?? 0) * (a.height ?? 0))
+    const stream = pool.length > 0 ? pool[0] : null
+    if (items.length == 0 && stream != null) {
+      items.push({ kind: 'video', url: stream.url })
+    }
+    const cover = media.covers?.[0]?.url ?? media.video?.cover?.url ?? ''
+    return {
+      kind: d?.kind == 'video' ? 'video' : 'album',
+      title: d?.title ?? d?.description ?? '',
+      cover: cover,
+      items: items,
+    }
+  }
+
+  async function startParse() {
+    if (stage.value == 'parsing') return
+    let link = ''
+    try {
+      link = extractLink(input.value)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      stage.value = 'error'
+      error.value = msg
+      return
+    }
+    stage.value = 'parsing'
+    error.value = ''
+    result.value = null
+    saveMsg.value = ''
+    seconds.value = 0
+    clearInterval(clock)
+    clock = setInterval(() => {
+      seconds.value++
+    }, 1000)
+    try {
+      const d = await fetchTask(link)
+      const r = mapResult(d)
+      if (r.items.length == 0) throw new Error('解析结果里没有可用的媒体')
+      images.value = r.items.filter((it) => it.kind == 'image')
+      videoItem.value = r.items.find((it) => it.kind == 'video') ?? null
+      result.value = r
+      stage.value = 'done'
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      error.value = msg
+      stage.value = 'error'
+    } finally {
+      clearInterval(clock)
+    }
+  }
+
+  function previewImage(index: number) {
+    const urls: string[] = []
+    for (let i = 0; i < images.value.length; i++) urls.push(images.value[i].url)
+    uni.previewImage({ urls: urls, current: index })
+  }
+
+  function downloadToTemp(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      uni.downloadFile({
+        url: url,
+        timeout: 120000,
+        success: (res) => {
+          if (res.statusCode >= 200 && res.statusCode < 300) resolve(res.tempFilePath)
+          else reject(new Error('下载失败 HTTP ' + res.statusCode))
+        },
+        fail: (err) => reject(new Error(err.errMsg || '下载失败')),
+      })
+    })
+  }
+
+  async function saveMedia() {
+    if (saving.value || result.value == null) return
+    const list: MediaItem[] = videoItem.value != null ? [videoItem.value] : images.value
+    if (list.length == 0) return
+    saving.value = true
+    saveTotal.value = list.length
+    savedCount.value = 0
+    saveMsg.value = ''
+    let failed = 0
+    let lastErr = ''
+    for (let i = 0; i < list.length; i++) {
+      try {
+        const tmp = await downloadToTemp(list[i].url)
+        if (list[i].kind == 'video') {
+          uni.saveVideoToPhotosAlbum({ filePath: tmp })
+        } else {
+          uni.saveImageToPhotosAlbum({ filePath: tmp })
+        }
+        savedCount.value++
+      } catch (e) {
+        failed++
+        lastErr = e instanceof Error ? e.message : String(e)
+      }
+    }
+    saving.value = false
+    saveMsg.value =
+      failed == 0
+        ? `已全部保存到相册(${savedCount.value} 个)`
+        : `保存了 ${savedCount.value} 个,${failed} 个失败:${lastErr}`
+  }
+
+  onLoad(() => {
+    uni.getClipboardData({
+      success: (res) => {
+        if (input.value.length == 0 && res.data.indexOf('douyin.com') >= 0) {
+          input.value = res.data
+        }
+      },
+    })
+  })
+</script>
+
+<style>
+  .label {
+    color: #3a4152;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .input-row {
+    flex-direction: row;
+    align-items: center;
+    border-width: 1px;
+    border-color: #d9dce6;
+    border-radius: 9px;
+    background-color: #fafbfd;
+    padding: 10px 12px;
+  }
+
+  .field {
+    flex: 1;
+    font-size: 14px;
+    color: #1c2333;
+  }
+
+  .hint {
+    color: #a6abb8;
+    font-size: 11px;
+    margin-top: 6px;
+  }
+
+  .action-row {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .action-btn {
+    padding: 10px 22px;
+  }
+
+  .error-box {
+    background-color: #fdf1f0;
+    border-radius: 7px;
+    padding: 8px 10px;
+    margin-top: 10px;
+  }
+
+  .error-text {
+    color: #8c2c25;
+    font-size: 12px;
+  }
+
+  .parsing {
+    align-items: center;
+    padding: 22px 14px;
+  }
+
+  .parsing-title {
+    color: #1c2333;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+
+  .row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .kind-badge {
+    color: #3c5ee8;
+    background-color: #e5eaff;
+    border-radius: 5px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  .title {
+    color: #1c2333;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+  }
+
+  .video {
+    width: 100%;
+    height: 210px;
+    background-color: #111827;
+    border-radius: 8px;
+  }
+
+  .grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .cell {
+    width: 220rpx;
+    height: 290rpx;
+    border-radius: 6px;
+    background-color: #eef0f5;
+    margin-bottom: 8px;
+  }
+
+  .save-btn {
+    margin-top: 12px;
+    padding: 11px 0;
+  }
+
+  .save-msg {
+    color: #1c6b40;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  .foot-note {
+    color: #a6abb8;
+    font-size: 11px;
+    line-height: 16px;
+    padding: 0 4px;
+  }
+
+  .empty-tip {
+    color: #a6abb8;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 80px;
+  }
+</style>

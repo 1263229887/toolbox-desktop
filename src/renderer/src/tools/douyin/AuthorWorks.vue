@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 
 const props = defineProps({
   api: { type: Object, required: true },
@@ -17,6 +17,12 @@ const hasMore = ref(false)
 const loadingMore = ref(false)
 const listError = ref('')
 const nickname = ref('')
+
+// 预览是「先看再勾」的主路径：点行进灯箱，在灯箱里就能改勾选
+const previewIdx = ref(-1)
+const previewPost = computed(() => posts.value[previewIdx.value] || null)
+const videoFailed = ref({})
+const imgFailed = ref({})
 
 const queue = ref({ running: false, stopping: false, done: 0, total: 0, dir: '', saved: [], failed: [] })
 const states = ref({})
@@ -67,6 +73,7 @@ async function load(append = false) {
     if (!append) {
       checked.value = new Set()
       states.value = {}
+      previewIdx.value = -1
       phase.value = 'list'
       if (data.nickname) nickname.value = data.nickname
     }
@@ -106,8 +113,13 @@ function stateLabel(s) {
   return '排队中'
 }
 
-function fmtDate(sec) {  if (!sec) return ''
-  const d = new Date(sec * 1000)
+// 上游给的 created_at 是 ISO 字符串（实测 "2026-05-31T08:25:00Z"），
+// 但也兼容 unix 秒/毫秒，防它哪天改回数字
+function fmtDate(v) {
+  if (!v) return ''
+  const n = Number(v)
+  const d = Number.isFinite(n) && n > 0 ? new Date(n > 1e11 ? n : n * 1000) : new Date(v)
+  if (!d.getTime()) return ''
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -116,12 +128,61 @@ function fmtSize(n) {
   return n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.round(n / 1024)}KB`
 }
 
+function fmtCount(n) {
+  n = Number(n) || 0
+  if (n >= 100000) return `${Math.round(n / 10000)}w`
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}w`
+  return String(n)
+}
+
+function statsOf(p) {
+  const s = p.stats || {}
+  const parts = []
+  if (s.digg_count) parts.push(`赞 ${fmtCount(s.digg_count)}`)
+  if (s.comment_count) parts.push(`评 ${fmtCount(s.comment_count)}`)
+  if (s.collect_count) parts.push(`藏 ${fmtCount(s.collect_count)}`)
+  return parts.join(' · ')
+}
+
 function metaOf(p) {
   const bits = [fmtDate(p.createdAt)]
   if (p.kind === 'video') bits.push(p.durationMs ? `${Math.round(p.durationMs / 1000)}s` : '视频')
-  else bits.push(`${p.items.length || ''} 张`)
+  else bits.push(p.items.length ? `${p.items.length} 张` : '待解析')
   if (p.sizeBytes) bits.push(fmtSize(p.sizeBytes))
+  const st = statsOf(p)
+  if (st) bits.push(st)
   return bits.filter(Boolean).join(' · ')
+}
+
+function openPreview(i) {
+  if (!posts.value[i]) return
+  // 焦点若还留在背后的输入框里，←/→ 会一边移动光标一边切换作品
+  document.activeElement?.blur?.()
+  previewIdx.value = i
+}
+
+function closePreview() {
+  previewIdx.value = -1
+}
+
+function stepPost(delta) {
+  const n = posts.value.length
+  if (previewIdx.value < 0 || n < 2) return
+  previewIdx.value = (previewIdx.value + delta + n) % n
+}
+
+const previewImages = computed(() => (previewPost.value?.items || []).filter((i) => i.type !== 'video'))
+const previewVideo = computed(() => (previewPost.value?.items || []).find((i) => i.type === 'video'))
+
+function onWindowKey(e) {
+  if (previewIdx.value < 0) return
+  if (e.isComposing) return
+  // 输入类元素里方向键是移动光标的，不抢
+  const tag = e.target?.tagName || ''
+  if (e.key !== 'Escape' && /^(input|textarea|select)$/i.test(tag)) return
+  if (e.key === 'Escape') closePreview()
+  else if (e.key === 'ArrowRight') stepPost(1)
+  else if (e.key === 'ArrowLeft') stepPost(-1)
 }
 
 async function start() {
@@ -166,7 +227,11 @@ watch(() => props.source, () => {
   load()
 }, { immediate: true })
 
-onBeforeUnmount(() => offProgress?.())
+onMounted(() => window.addEventListener('keydown', onWindowKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKey)
+  offProgress?.()
+})
 </script>
 
 <template>
@@ -187,12 +252,21 @@ onBeforeUnmount(() => offProgress?.())
           <input type="checkbox" :checked="checked.size === posts.length && posts.length > 0" @change="toggleAll" />
           <span class="text-13px">全选</span>
         </label>
-        <span class="caption">已选 {{ selected.length }}{{ selectedBytes ? ` · 约 ${fmtSize(selectedBytes)}` : '' }}</span>
+        <span class="caption">已选 {{ selected.length }}{{ selectedBytes ? ` · 约 ${fmtSize(selectedBytes)}` : '' }} · 点作品可以预览</span>
       </div>
 
       <ul class="stack gap-1 overflow-auto max-h-[46vh] pr-1">
-        <li v-for="p in posts" :key="p.id" class="row gap-2 rounded-md border border-transparent px-1.5 py-1.5 transition-colors duration-[var(--m-micro)] hover:border-surface-line hover:bg-surface-sunken">
-          <input type="checkbox" :checked="checked.has(p.id)" :disabled="queue.running" class="shrink-0" @change="toggle(p.id)" />
+        <li
+          v-for="(p, i) in posts"
+          :key="p.id"
+          class="group row cursor-pointer gap-2 rounded-md border border-transparent px-1.5 py-1.5 transition-colors duration-[var(--m-micro)] hover:border-surface-line hover:bg-surface-sunken"
+          :class="checked.has(p.id) ? 'bg-accent-soft' : ''"
+          :title="p.title"
+          @click="openPreview(i)"
+        >
+          <span class="shrink-0" @click.stop>
+            <input type="checkbox" :checked="checked.has(p.id)" :disabled="queue.running" @change="toggle(p.id)" />
+          </span>
           <img v-if="p.cover" :src="p.cover" loading="lazy" alt="" class="size-11 shrink-0 rounded border border-surface-line bg-surface-sunken object-cover" />
           <span v-else class="size-11 shrink-0 rounded border border-surface-line bg-surface-sunken" />
           <div class="min-w-0 flex-1">
@@ -202,6 +276,7 @@ onBeforeUnmount(() => offProgress?.())
             <p v-else-if="states[p.id]?.state === 'done'" class="caption truncate text-#1c6b40">已完成</p>
             <p v-if="states[p.id]?.error && states[p.id].state === 'failed'" class="caption truncate text-#8c2c25">{{ states[p.id].error }}</p>
           </div>
+          <span class="i-lucide-eye size-4 flex-none text-ink-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100" title="预览（点击行也可以）" />
         </li>
       </ul>
 
@@ -238,5 +313,78 @@ onBeforeUnmount(() => offProgress?.())
     </template>
 
     <p v-if="phase === 'error'" class="rounded-md border border-#f3c6c2 bg-#fdf1f0 px-3 py-2 text-12px text-#8c2c25">{{ error }}</p>
+
+    <Teleport to="body">
+      <Transition name="viewer">
+        <div v-if="previewPost" class="fixed inset-0 z-50 flex flex-col bg-#000e" data-chrome @click.self="closePreview">
+          <div class="flex min-h-11 flex-none items-center gap-3 px-4 py-2 text-12px text-white/75">
+            <label class="row flex-none cursor-pointer select-none gap-1.5" @click.stop>
+              <input type="checkbox" :checked="checked.has(previewPost.id)" :disabled="queue.running" @change="toggle(previewPost.id)" />
+              <span :class="checked.has(previewPost.id) ? 'font-600 text-white' : ''">选入下载</span>
+            </label>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-white/90">{{ previewPost.title || '（无标题）' }}</p>
+              <p class="truncate text-white/50">{{ metaOf(previewPost) }}</p>
+            </div>
+            <span class="tabular flex-none">{{ previewIdx + 1 }} / {{ posts.length }}</span>
+            <button class="btn-ghost h-7 flex-none text-white/80 hover:bg-white/10 hover:text-white" @click="closePreview">关闭 Esc</button>
+          </div>
+
+          <div class="relative flex min-h-0 flex-1 items-center justify-center px-4 pb-4">
+            <video
+              v-if="previewVideo && !videoFailed[previewPost.id]"
+              :src="previewVideo.url"
+              :poster="previewPost.cover || undefined"
+              controls
+              preload="metadata"
+              playsinline
+              class="max-h-full max-w-full rounded-md bg-black"
+              @error="videoFailed[previewPost.id] = true"
+            />
+            <div v-else-if="previewVideo" class="stack items-center gap-2 text-center text-13px text-white/80">
+              <span class="i-lucide-video-off size-6" />
+              <p>视频预览加载失败（直链可能已过期）</p>
+              <p class="text-11px text-white/50">重新拉取列表可刷新直链；下载不受影响。</p>
+            </div>
+
+            <div v-else-if="previewImages.length" class="h-full w-full overflow-y-auto" @click.self="closePreview">
+              <img
+                v-for="(it, k) in previewImages"
+                :key="it.url"
+                :src="it.url"
+                loading="lazy"
+                class="mx-auto my-1.5 max-h-[72vh] max-w-full rounded-md object-contain"
+                :style="imgFailed[it.url] ? 'display:none' : ''"
+                :alt="`第 ${k + 1} 张`"
+                @error="imgFailed[it.url] = true"
+              />
+            </div>
+
+            <div v-else class="stack items-center gap-2 text-center text-13px text-white/80">
+              <span class="i-lucide-image-off size-6" />
+              <p>这条列表里没带直链，下载时会现场解析</p>
+            </div>
+
+            <button v-if="posts.length > 1" class="btn-ghost absolute left-3 size-9 flex-none bg-#ffffff14 text-white hover:bg-#ffffff26" title="上一条（←）" @click="stepPost(-1)"><span class="i-lucide-chevron-left size-5" /></button>
+            <button v-if="posts.length > 1" class="btn-ghost absolute right-3 size-9 flex-none bg-#ffffff14 text-white hover:bg-#ffffff26" title="下一条（→）" @click="stepPost(1)"><span class="i-lucide-chevron-right size-5" /></button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </section>
 </template>
+
+<style scoped>
+/* 灯箱进出场：Index.vue 里的同名过渡是 scoped 的，过不来，这里自己带一份 */
+.viewer-enter-active,
+.viewer-leave-active {
+  transition:
+    opacity var(--m-micro) var(--m-enter),
+    transform var(--m-micro) var(--m-enter);
+}
+.viewer-enter-from,
+.viewer-leave-to {
+  opacity: 0;
+  transform: scale(0.994);
+}
+</style>

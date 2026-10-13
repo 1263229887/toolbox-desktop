@@ -23,6 +23,8 @@ export default defineConfig({
   renderer: {
     resolve: { alias: { '@': `${root}src/renderer/src` } },
     plugins: [vue(), UnoCSS()],
+    // mammoth 是 CJS 的 UMD 包，不预声明的话首次转换会触发中途 re-optimize 并整页重载
+    optimizeDeps: { include: ['mammoth/mammoth.browser'] },
     build: { rollupOptions: { input: { index: `${root}src/renderer/index.html` } } },
   },
 })

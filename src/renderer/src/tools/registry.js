@@ -29,6 +29,17 @@ export const BUILTIN_TOOLS = [
     loader: () => import('@/tools/img-pdf/Index.vue'),
   },
   {
+    id: 'word-to-pdf',
+    name: 'Word 转 PDF',
+    summary: '把 .docx 排版成 PDF，走 Chromium 出纸；复杂排版（分栏/域代码）会丢',
+    icon: 'i-lucide-file-text',
+    category: '文档',
+    source: 'builtin',
+    status: 'ready',
+    capabilities: ['dialog:pickFiles', 'files:read', 'files:save', 'print:htmlToPdf'],
+    loader: () => import('@/tools/word-pdf/Index.vue'),
+  },
+  {
     id: 'pdf-compress',
     name: 'PDF 压缩',
     summary: '重压内嵌图像缩小体积，文字与页面结构原样保留',

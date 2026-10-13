@@ -4,6 +4,7 @@ import { app, clipboard, dialog, ipcMain, shell } from 'electron'
 import { authorPosts, parse as parseDouyin } from './services/douyin.js'
 import { downloadFile, safeName, stamp, UA } from './services/netio.js'
 import * as plugins from './services/plugins.js'
+import { htmlToPdf } from './services/printtopdf.js'
 import { initUpdater } from './services/updater.js'
 import { defaults, read as readSettings, write as writeSettings } from './services/settings.js'
 
@@ -261,6 +262,11 @@ export function registerIpc() {
   // 桌面工具的默认姿势：口令通常在剪贴板里，读出来预填，省一次 Ctrl+V
   ipcMain.handle('clipboard:readText', wrap(async () => clipboard.readText()))
   ipcMain.handle('shell:showItemInFolder', wrap(async (_e, { target }) => shell.showItemInFolder(target)))
+
+  ipcMain.handle('print:htmlToPdf', wrap(async (_e, { html, pageSize, landscape } = {}) => {
+    if (typeof html !== 'string' || !html.trim()) throw new Error('缺少要打印的 HTML 内容')
+    return await htmlToPdf(html, { pageSize, landscape: Boolean(landscape) })
+  }))
 
   ipcMain.handle('plugins:list', wrap(async () => await plugins.listInstalled()))
   ipcMain.handle('plugins:registry', wrap(async () => await plugins.fetchRegistry()))

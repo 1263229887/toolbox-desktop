@@ -19,6 +19,7 @@ const INVOKE = new Set([
   'shell:openPath',
   'shell:showItemInFolder',
   'clipboard:readText',
+  'print:htmlToPdf',
   'plugins:list',
   'plugins:registry',
   'plugins:install',
